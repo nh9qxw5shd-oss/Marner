@@ -72,7 +72,7 @@ export function Bills({
               value={balance}
               onChange={(e) => onSetBalance(parseFloat(e.target.value) || 0)}
               style={{
-                fontFamily: 'Fraunces, Georgia, serif',
+                fontFamily: "'Fraunces', Georgia, serif",
                 fontSize: 32,
                 fontWeight: 500,
                 background: 'transparent',

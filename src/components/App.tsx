@@ -197,7 +197,7 @@ export function App() {
               color: '#E74C3C',
               fontSize: 13,
               marginBottom: 20,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
             }}
           >
             {error} — check that the migration has run and the `marner` schema is exposed.

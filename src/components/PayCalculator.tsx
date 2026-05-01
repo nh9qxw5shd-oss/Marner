@@ -222,7 +222,7 @@ export function PayCalculator({
           style={{
             fontSize: 11,
             color: '#7A8BA8',
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
             letterSpacing: '0.04em',
           }}
         >

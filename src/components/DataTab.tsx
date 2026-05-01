@@ -22,7 +22,13 @@ export function DataTab({ bills, balance, pay, onSeed, onWipe, onImport }: DataT
   function exportAll() {
     const data = JSON.stringify(
       {
-        bills: bills.map(({ id: _id, ...rest }) => rest),
+        bills: bills.map((b) => ({
+          description: b.description,
+          amount: b.amount,
+          category: b.category,
+          paid: b.paid,
+          position: b.position,
+        })),
         balance,
         pay,
         _v: 1,
@@ -112,7 +118,7 @@ export function DataTab({ bills, balance, pay, onSeed, onWipe, onImport }: DataT
             onChange={(e) => setImportText(e.target.value)}
             placeholder="Paste exported JSON here…"
             rows={6}
-            style={{ resize: 'vertical', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}
+            style={{ resize: 'vertical', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12 }}
           />
           <button
             className="btn"
@@ -130,7 +136,7 @@ export function DataTab({ bills, balance, pay, onSeed, onWipe, onImport }: DataT
               marginTop: 12,
               fontSize: 12,
               color: '#F39C12',
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
             }}
           >
             {msg}
