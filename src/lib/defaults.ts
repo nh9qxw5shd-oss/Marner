@@ -1,12 +1,15 @@
 import type { Bill, PayConfig } from './types';
 
 export const DEFAULT_PAY: PayConfig = {
-  baseSalary: 75000,
-  overtimeMonthly: 0,
+  baseSalary: 70933,
+  contractHoursPerWeek: 35,
+  opsAllowancePct: 20,
+  restDayHoursPer4W: 0,
+  sundayRestDayHoursPer4W: 0,
   bonusAnnual: 0,
   pensionPct: 5,
   pensionType: 'salary_sacrifice',
-  taxCode: '1257L',
+  taxCode: '845T',
   region: 'rUK',
   studentLoanPlan: 'NONE',
   hasPostgrad: false,

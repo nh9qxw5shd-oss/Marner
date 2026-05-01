@@ -15,7 +15,19 @@ export function PayCalculator({
   const r = useMemo(() => calcTakeHome(pay), [pay]);
 
   const breakdown = [
-    { label: 'Gross (incl. OT + bonus)', value: r.grossAnnualPreSac, accent: '#E8EDF5' },
+    { label: 'Base salary', value: pay.baseSalary, accent: '#E8EDF5' },
+    {
+      label: 'Ops allowance',
+      value: r.opsAllowanceAnnual,
+      accent: r.opsAllowanceAnnual > 0 ? '#4A9ECC' : '#7A8BA8',
+      hint: `${pay.opsAllowancePct}%`,
+    },
+    {
+      label: 'Rest day / Sunday pay',
+      value: r.restDaySundayAnnual,
+      accent: r.restDaySundayAnnual > 0 ? '#4A9ECC' : '#7A8BA8',
+    },
+    { label: 'Annual bonus', value: pay.bonusAnnual, accent: pay.bonusAnnual > 0 ? '#E8EDF5' : '#7A8BA8' },
     {
       label: 'Pension contribution',
       value: -r.pensionContrib,
@@ -37,7 +49,7 @@ export function PayCalculator({
       <div className="panel" style={{ padding: 20, alignSelf: 'start', position: 'sticky', top: 80 }}>
         <div className="lab" style={{ marginBottom: 14 }}>Inputs</div>
 
-        <Field label="Base salary (annual)">
+        <Field label="Annual headline salary">
           <input
             type="number"
             value={pay.baseSalary}
@@ -45,11 +57,42 @@ export function PayCalculator({
           />
         </Field>
 
-        <Field label="Overtime (per month, gross)">
+        <Field label="Contract hours / week">
           <input
             type="number"
-            value={pay.overtimeMonthly}
-            onChange={(e) => onChange({ overtimeMonthly: parseFloat(e.target.value) || 0 })}
+            step="0.5"
+            value={pay.contractHoursPerWeek}
+            onChange={(e) => onChange({ contractHoursPerWeek: parseFloat(e.target.value) || 35 })}
+          />
+        </Field>
+
+        <Field label="Ops allowance %">
+          <input
+            type="number"
+            step="1"
+            value={pay.opsAllowancePct}
+            onChange={(e) => onChange({ opsAllowancePct: parseFloat(e.target.value) || 0 })}
+          />
+          <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
+            % of base salary, paid each period
+          </div>
+        </Field>
+
+        <Field label="Rest day hours per period (1.25×)">
+          <input
+            type="number"
+            step="1"
+            value={pay.restDayHoursPer4W}
+            onChange={(e) => onChange({ restDayHoursPer4W: parseFloat(e.target.value) || 0 })}
+          />
+        </Field>
+
+        <Field label="Sunday rest day hours per period (1.5×)">
+          <input
+            type="number"
+            step="1"
+            value={pay.sundayRestDayHoursPer4W}
+            onChange={(e) => onChange({ sundayRestDayHoursPer4W: parseFloat(e.target.value) || 0 })}
           />
         </Field>
 
@@ -140,15 +183,16 @@ export function PayCalculator({
 
       <div style={{ display: 'grid', gap: 20, alignContent: 'start' }}>
         <div className="card tick" style={{ padding: 28 }}>
-          <div className="lab">Monthly take-home</div>
+          <div className="lab">4-weekly take-home</div>
           <div
             className="num"
             style={{ fontSize: 64, color: '#27AE60', lineHeight: 1, marginTop: 12, fontWeight: 500 }}
           >
-            {fmtGBP(r.cashMonthly, { decimals: 0 })}
+            {fmtGBP(r.cash4Weekly, { decimals: 0 })}
           </div>
           <div style={{ display: 'flex', gap: 24, marginTop: 18, flexWrap: 'wrap' }}>
             <Stat label="Annual" value={fmtGBP(r.cashAnnual)} />
+            <Stat label="Monthly" value={fmtGBP(r.cashMonthly)} />
             <Stat label="Weekly" value={fmtGBP(r.cashWeekly)} />
             <Stat label="Effective tax" value={fmtPct(r.effectiveTaxRate, 1)} />
             <Stat label="Marginal rate" value={fmtPct(r.marginal, 0)} />
@@ -227,8 +271,9 @@ export function PayCalculator({
           }}
         >
           Estimates only. UK 2026/27 thresholds: PA £12,570 · NI 8% / 2% · Higher rate £50,270 ·
-          Additional £125,140. Salary sacrifice reduces both tax & NI base. Net pay reduces tax base
-          only. RAS comes off net.
+          Additional £125,140. 13 × 4-weekly periods per year. Rest day 1.25× · Sunday rest day 1.5× ordinary
+          time rate. Ops allowance on base salary only. Pension on base salary only. Salary sacrifice
+          reduces both tax &amp; NI base.
         </div>
       </div>
     </div>
