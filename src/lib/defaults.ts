@@ -1,0 +1,38 @@
+import type { Bill, PayConfig } from './types';
+
+export const DEFAULT_PAY: PayConfig = {
+  baseSalary: 75000,
+  overtimeMonthly: 0,
+  bonusAnnual: 0,
+  pensionPct: 5,
+  pensionType: 'salary_sacrifice',
+  taxCode: '1257L',
+  region: 'rUK',
+  studentLoanPlan: 'NONE',
+  hasPostgrad: false,
+};
+
+export const SEED_BILLS: Omit<Bill, 'id'>[] = [
+  { description: 'Mortgage',            amount: 1591, category: 'Housing',       paid: false, position: 0 },
+  { description: 'Council Tax',         amount: 267,  category: 'Housing',       paid: false, position: 1 },
+  { description: 'Home Insurance',      amount: 31,   category: 'Insurance',     paid: false, position: 2 },
+  { description: 'Life Insurance',      amount: 120,  category: 'Insurance',     paid: false, position: 3 },
+  { description: 'Electric (Octopus)',  amount: 275,  category: 'Utilities',     paid: false, position: 4 },
+  { description: 'Water',               amount: 80,   category: 'Utilities',     paid: false, position: 5 },
+  { description: 'Gas (EDF)',           amount: 61,   category: 'Utilities',     paid: false, position: 6 },
+  { description: 'Broadband',           amount: 66,   category: 'Utilities',     paid: false, position: 7 },
+  { description: 'Food / Shopping',     amount: 600,  category: 'Living',        paid: false, position: 8 },
+  { description: 'NMC (Quarterly)',     amount: 30,   category: 'Living',        paid: false, position: 9 },
+  { description: 'Netflix',             amount: 18,   category: 'Subscriptions', paid: false, position: 10 },
+  { description: 'Spotify',             amount: 17,   category: 'Subscriptions', paid: false, position: 11 },
+  { description: 'Amazon Prime',        amount: 8,    category: 'Subscriptions', paid: false, position: 12 },
+  { description: 'Stripe',              amount: 16,   category: 'Subscriptions', paid: false, position: 13 },
+  { description: 'Multi-car Insurance', amount: 147,  category: 'Vehicles',      paid: false, position: 14 },
+  { description: 'Car PCP — Tesla Y',   amount: 486,  category: 'Vehicles',      paid: false, position: 15 },
+  { description: 'Car PCP — Tesla 3',   amount: 391,  category: 'Vehicles',      paid: false, position: 16 },
+  { description: 'GAP M3',              amount: 12,   category: 'Vehicles',      paid: false, position: 17 },
+  { description: 'PSL (GAP)',           amount: 12,   category: 'Vehicles',      paid: false, position: 18 },
+  { description: 'Brad Mobile (O2)',    amount: 50,   category: 'Mobile',        paid: false, position: 19 },
+  { description: 'Lottie Mobile',       amount: 42,   category: 'Mobile',        paid: false, position: 20 },
+  { description: 'Boots',               amount: 47,   category: 'Living',        paid: false, position: 21 },
+];
