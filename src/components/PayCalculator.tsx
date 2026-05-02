@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { NumericInput } from './NumericInput';
 import { calcTakeHome } from '@/lib/tax/calc';
 import { fmtGBP, fmtPct } from '@/lib/format';
 import type { PayConfig } from '@/lib/types';
@@ -68,28 +69,26 @@ export function PayCalculator({
         <div className="lab" style={{ marginBottom: 14 }}>Inputs</div>
 
         <Field label="Annual headline salary">
-          <input
-            type="number"
+          <NumericInput
             value={pay.baseSalary}
-            onChange={(e) => onChange({ baseSalary: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ baseSalary: n })}
           />
         </Field>
 
         <Field label="Contract hours / week">
-          <input
-            type="number"
+          <NumericInput
             step="0.5"
             value={pay.contractHoursPerWeek}
-            onChange={(e) => onChange({ contractHoursPerWeek: parseFloat(e.target.value) || 35 })}
+            onChange={(n) => onChange({ contractHoursPerWeek: n })}
+            fallback={35}
           />
         </Field>
 
         <Field label="Ops allowance %">
-          <input
-            type="number"
+          <NumericInput
             step="1"
             value={pay.opsAllowancePct}
-            onChange={(e) => onChange({ opsAllowancePct: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ opsAllowancePct: n })}
           />
           <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
             % of base salary, paid each period
@@ -97,40 +96,36 @@ export function PayCalculator({
         </Field>
 
         <Field label="Rest day hours per period (1.25×)">
-          <input
-            type="number"
+          <NumericInput
             step="1"
             value={pay.restDayHoursPer4W}
-            onChange={(e) => onChange({ restDayHoursPer4W: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ restDayHoursPer4W: n })}
           />
         </Field>
 
         <Field label="Sunday rest day hours per period (1.5×)">
-          <input
-            type="number"
+          <NumericInput
             step="1"
             value={pay.sundayRestDayHoursPer4W}
-            onChange={(e) => onChange({ sundayRestDayHoursPer4W: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ sundayRestDayHoursPer4W: n })}
           />
         </Field>
 
         <Field label="Competence payment per period (£)">
-          <input
-            type="number"
+          <NumericInput
             step="0.01"
             value={pay.competencePayment4W}
-            onChange={(e) => onChange({ competencePayment4W: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ competencePayment4W: n })}
           />
         </Field>
 
         <div className="divider" />
 
         <Field label="Cycle to work repayment per period (£)">
-          <input
-            type="number"
+          <NumericInput
             step="0.01"
             value={pay.cycleToWork4W}
-            onChange={(e) => onChange({ cycleToWork4W: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ cycleToWork4W: n })}
           />
           <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
             Salary sacrifice — reduces tax &amp; NI
@@ -138,11 +133,10 @@ export function PayCalculator({
         </Field>
 
         <Field label="Healthcare deduction per period (£)">
-          <input
-            type="number"
+          <NumericInput
             step="0.01"
             value={pay.healthcare4W}
-            onChange={(e) => onChange({ healthcare4W: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ healthcare4W: n })}
           />
           <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
             Pre-tax — reduces tax &amp; NI
@@ -150,10 +144,9 @@ export function PayCalculator({
         </Field>
 
         <Field label="Annual bonus (gross)">
-          <input
-            type="number"
+          <NumericInput
             value={pay.bonusAnnual}
-            onChange={(e) => onChange({ bonusAnnual: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ bonusAnnual: n })}
           />
         </Field>
 
@@ -178,11 +171,10 @@ export function PayCalculator({
         <div className="divider" />
 
         <Field label="Pension contribution %">
-          <input
-            type="number"
+          <NumericInput
             step="0.5"
             value={pay.pensionPct}
-            onChange={(e) => onChange({ pensionPct: parseFloat(e.target.value) || 0 })}
+            onChange={(n) => onChange({ pensionPct: n })}
           />
         </Field>
 
