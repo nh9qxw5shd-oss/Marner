@@ -62,7 +62,10 @@ export function Bills({
   const totals = useMemo(() => {
     const monthly = bills.reduce((s, b) => s + toMonthly(b.isBudget ? b.amount : b.amount, b.frequency), 0);
     const paidMonthly = bills.filter(b => b.paid).reduce((s, b) => s + toMonthly(b.amount, b.frequency), 0);
-    const outstanding = monthly - paidMonthly;
+    const outstanding = bills.reduce((s, b) => {
+      if (b.isBudget) return s + toMonthly(Math.max(0, b.amount - (b.spent || 0)), b.frequency);
+      return b.paid ? s : s + toMonthly(b.amount, b.frequency);
+    }, 0);
     const projected = Number(balance || 0) - outstanding;
     return { monthly, paidMonthly, outstanding, projected };
   }, [bills, balance]);
