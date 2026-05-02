@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { NumericInput } from './NumericInput';
 import { Check, Edit2, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { fmtGBP } from '@/lib/format';
 import type { Bill, BillFrequency } from '@/lib/types';
@@ -62,7 +63,10 @@ export function Bills({
   const totals = useMemo(() => {
     const monthly = bills.reduce((s, b) => s + toMonthly(b.isBudget ? b.amount : b.amount, b.frequency), 0);
     const paidMonthly = bills.filter(b => b.paid).reduce((s, b) => s + toMonthly(b.amount, b.frequency), 0);
-    const outstanding = monthly - paidMonthly;
+    const outstanding = bills.reduce((s, b) => {
+      if (b.isBudget) return s + toMonthly(Math.max(0, b.amount - (b.spent || 0)), b.frequency);
+      return b.paid ? s : s + toMonthly(b.amount, b.frequency);
+    }, 0);
     const projected = Number(balance || 0) - outstanding;
     return { monthly, paidMonthly, outstanding, projected };
   }, [bills, balance]);
@@ -89,10 +93,9 @@ export function Bills({
           <div className="lab">Current balance</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
             <span className="num" style={{ fontSize: 18, color: '#7A8BA8' }}>£</span>
-            <input
-              type="number"
+            <NumericInput
               value={balance}
-              onChange={e => onSetBalance(parseFloat(e.target.value) || 0)}
+              onChange={onSetBalance}
               style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 28, fontWeight: 500, background: 'transparent', border: 'none', padding: 0, width: '100%' }}
             />
           </div>
