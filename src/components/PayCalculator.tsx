@@ -23,11 +23,29 @@ export function PayCalculator({
       hint: `${pay.opsAllowancePct}%`,
     },
     {
+      label: 'Competence payment',
+      value: r.competencePaymentAnnual,
+      accent: r.competencePaymentAnnual > 0 ? '#4A9ECC' : '#7A8BA8',
+      hint: `£${pay.competencePayment4W}/period`,
+    },
+    {
       label: 'Rest day / Sunday pay',
       value: r.restDaySundayAnnual,
       accent: r.restDaySundayAnnual > 0 ? '#4A9ECC' : '#7A8BA8',
     },
     { label: 'Annual bonus', value: pay.bonusAnnual, accent: pay.bonusAnnual > 0 ? '#E8EDF5' : '#7A8BA8' },
+    {
+      label: 'Cycle to work',
+      value: -r.cycleToWorkAnnual,
+      accent: r.cycleToWorkAnnual > 0 ? '#7A8BA8' : '#7A8BA8',
+      hint: 'pre-tax sacrifice',
+    },
+    {
+      label: 'Healthcare',
+      value: -r.healthcareAnnual,
+      accent: r.healthcareAnnual > 0 ? '#7A8BA8' : '#7A8BA8',
+      hint: 'pre-tax',
+    },
     {
       label: 'Pension contribution',
       value: -r.pensionContrib,
@@ -94,6 +112,41 @@ export function PayCalculator({
             value={pay.sundayRestDayHoursPer4W}
             onChange={(e) => onChange({ sundayRestDayHoursPer4W: parseFloat(e.target.value) || 0 })}
           />
+        </Field>
+
+        <Field label="Competence payment per period (£)">
+          <input
+            type="number"
+            step="0.01"
+            value={pay.competencePayment4W}
+            onChange={(e) => onChange({ competencePayment4W: parseFloat(e.target.value) || 0 })}
+          />
+        </Field>
+
+        <div className="divider" />
+
+        <Field label="Cycle to work repayment per period (£)">
+          <input
+            type="number"
+            step="0.01"
+            value={pay.cycleToWork4W}
+            onChange={(e) => onChange({ cycleToWork4W: parseFloat(e.target.value) || 0 })}
+          />
+          <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
+            Salary sacrifice — reduces tax &amp; NI
+          </div>
+        </Field>
+
+        <Field label="Healthcare deduction per period (£)">
+          <input
+            type="number"
+            step="0.01"
+            value={pay.healthcare4W}
+            onChange={(e) => onChange({ healthcare4W: parseFloat(e.target.value) || 0 })}
+          />
+          <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
+            Pre-tax — reduces tax &amp; NI
+          </div>
         </Field>
 
         <Field label="Annual bonus (gross)">
@@ -253,6 +306,8 @@ export function PayCalculator({
           <BreakdownBar
             gross={r.grossAnnualPreSac}
             slices={[
+              { label: 'Cycle to work', value: r.cycleToWorkAnnual, color: '#2980B9' },
+              { label: 'Healthcare', value: r.healthcareAnnual, color: '#1A5276' },
               { label: 'Pension', value: r.pensionContrib + r.pensionFromNet, color: '#F39C12' },
               { label: 'Income tax', value: r.incomeTax, color: '#E74C3C' },
               { label: 'NI', value: r.ni, color: '#C0392B' },

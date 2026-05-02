@@ -23,6 +23,9 @@ export interface PayConfig {
   opsAllowancePct: number;
   restDayHoursPer4W: number;
   sundayRestDayHoursPer4W: number;
+  competencePayment4W: number;
+  cycleToWork4W: number;
+  healthcare4W: number;
   bonusAnnual: number;
   pensionPct: number;
   pensionType: PensionType;
@@ -36,6 +39,9 @@ export interface PayResult {
   grossAnnualPreSac: number;
   opsAllowanceAnnual: number;
   restDaySundayAnnual: number;
+  competencePaymentAnnual: number;
+  cycleToWorkAnnual: number;
+  healthcareAnnual: number;
   grossForTax: number;
   grossForNI: number;
   pensionContrib: number;
@@ -160,24 +166,32 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   const restDayExtra   = hourlyRate * 1.25 * (cfg.restDayHoursPer4W || 0) * PERIODS_PER_YEAR;
   const sundayExtra    = hourlyRate * 1.50 * (cfg.sundayRestDayHoursPer4W || 0) * PERIODS_PER_YEAR;
   const restDaySundayAnnual = restDayExtra + sundayExtra;
+  const competencePaymentAnnual = (cfg.competencePayment4W || 0) * PERIODS_PER_YEAR;
+  const cycleToWorkAnnual = (cfg.cycleToWork4W || 0) * PERIODS_PER_YEAR;
+  const healthcareAnnual  = (cfg.healthcare4W  || 0) * PERIODS_PER_YEAR;
 
-  const grossAnnualPreSac = base + opsAllowanceAnnual + restDaySundayAnnual + (cfg.bonusAnnual || 0);
+  const grossAnnualPreSac =
+    base + opsAllowanceAnnual + restDaySundayAnnual + competencePaymentAnnual + (cfg.bonusAnnual || 0);
 
   // Pension calculated on base salary only (ops allowance and extras are non-pensionable)
   const pensionContrib = base * ((cfg.pensionPct || 0) / 100);
 
   let grossForTax = grossAnnualPreSac;
-  let grossForNI = grossAnnualPreSac;
+  let grossForNI  = grossAnnualPreSac;
   let pensionFromNet = 0;
 
   if (cfg.pensionType === 'salary_sacrifice') {
     grossForTax -= pensionContrib;
-    grossForNI -= pensionContrib;
+    grossForNI  -= pensionContrib;
   } else if (cfg.pensionType === 'net_pay') {
     grossForTax -= pensionContrib;
   } else {
     pensionFromNet = pensionContrib;
   }
+
+  // Cycle to work and healthcare are pre-tax salary sacrifice — reduce both tax and NI bases
+  grossForTax -= cycleToWorkAnnual + healthcareAnnual;
+  grossForNI  -= cycleToWorkAnnual + healthcareAnnual;
 
   const { allowance: codeAllowance, rule } = parseTaxCode(cfg.taxCode);
 
@@ -202,19 +216,25 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   const ni = calcNI(grossForNI);
   const studentLoan = calcStudentLoan(grossAnnualPreSac, cfg.studentLoanPlan, cfg.hasPostgrad);
 
+  // grossForTax already has pension (if salary_sacrifice) + cycle-to-work + healthcare deducted.
+  // For other pension types we subtract the non-sacrifice items explicitly.
+  const preTaxExtra = cycleToWorkAnnual + healthcareAnnual;
   let cashAnnual: number;
   if (cfg.pensionType === 'salary_sacrifice') {
     cashAnnual = grossForTax - incomeTax - ni - studentLoan;
   } else if (cfg.pensionType === 'net_pay') {
-    cashAnnual = grossAnnualPreSac - pensionContrib - incomeTax - ni - studentLoan;
+    cashAnnual = grossAnnualPreSac - pensionContrib - preTaxExtra - incomeTax - ni - studentLoan;
   } else {
-    cashAnnual = grossAnnualPreSac - incomeTax - ni - studentLoan - pensionFromNet;
+    cashAnnual = grossAnnualPreSac - preTaxExtra - incomeTax - ni - studentLoan - pensionFromNet;
   }
 
   return {
     grossAnnualPreSac,
     opsAllowanceAnnual,
     restDaySundayAnnual,
+    competencePaymentAnnual,
+    cycleToWorkAnnual,
+    healthcareAnnual,
     grossForTax,
     grossForNI,
     pensionContrib,
