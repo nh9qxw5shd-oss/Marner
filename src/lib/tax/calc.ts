@@ -33,6 +33,8 @@ export interface PayConfig {
   region: Region;
   studentLoanPlan: StudentLoanPlan;
   hasPostgrad: boolean;
+  nextPayDate: string;     // 'YYYY-MM-DD' — first/next 4-weekly pay date
+  payIntervalDays: number; // 28 for 4-weekly
 }
 
 export interface PayResult {
