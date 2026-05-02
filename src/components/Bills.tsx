@@ -10,8 +10,10 @@ import {
   billDueInPeriod,
   freePeriodsFor,
   currentPeriodIndex,
+  nextOccurrenceAfter,
   toMonthly,
   toPeriod,
+  fmtDate,
   FREQ_LABELS,
   MONTH_NAMES,
   ordinal,
@@ -164,7 +166,7 @@ export function Bills({
                   ? <EditTile key={b.id} bill={b} onSave={patch => { onEdit(b.id, patch); setEditId(null); }} onCancel={() => setEditId(null)} />
                   : b.isBudget
                     ? <BudgetTile key={b.id} bill={b} periods={periods} onToggle={() => onToggle(b.id)} onEdit={() => setEditId(b.id)} onRemove={() => onRemove(b.id)} onUpdateSpent={s => onEdit(b.id, { spent: s })} />
-                    : <BillTile key={b.id} bill={b} periods={periods} onToggle={() => onToggle(b.id)} onEdit={() => setEditId(b.id)} onRemove={() => onRemove(b.id)} />
+                    : <BillTile key={b.id} bill={b} periods={periods} curIdx={curIdx} onToggle={() => onToggle(b.id)} onEdit={() => setEditId(b.id)} onRemove={() => onRemove(b.id)} />
               ))}
             </div>
           ))
@@ -176,16 +178,23 @@ export function Bills({
 
 // ─── Pay cycle panel ─────────────────────────────────────────────────────────
 function PayCyclePanel({ periods, bills, curIdx }: { periods: PayPeriod[]; bills: Bill[]; curIdx: number }) {
-  const monthlyBills = bills.filter(b => !b.isBudget && b.ddDay);
+  // Separate quarterly/annual from regular recurring bills for distinct display
+  const regularBills = bills.filter(b => !b.isBudget && b.ddDay &&
+    b.frequency !== 'quarterly' && b.frequency !== 'annual');
+  const periodicBills = bills.filter(b => !b.isBudget && b.ddDay &&
+    (b.frequency === 'quarterly' || b.frequency === 'annual'));
 
   const rows = periods.map((p, i) => {
-    const due = monthlyBills.filter(b =>
-      billDueInPeriod(p, b.ddDay!, b.frequency, b.ddMonth)
-    );
-    return { period: p, due, isFree: due.length === 0, isCurrent: i === curIdx };
+    const due = regularBills.filter(b => billDueInPeriod(p, b.ddDay!, b.frequency, b.ddMonth));
+    const periodicDue = periodicBills.filter(b => billDueInPeriod(p, b.ddDay!, b.frequency, b.ddMonth));
+    // A period is "free" when no regular monthly/weekly DDs fall within it.
+    // This identifies the pay period where you were paid, paid again before the next DD date,
+    // and no direct debit lands between those two pay dates.
+    const isFree = due.length === 0;
+    return { period: p, due, periodicDue, isFree, isCurrent: i === curIdx };
   });
 
-  const freeCount = rows.filter(r => r.isFree).length;
+  const freeCount = rows.filter(r => r.isFree && r.periodicDue.length === 0).length;
 
   return (
     <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
@@ -194,77 +203,110 @@ function PayCyclePanel({ periods, bills, curIdx }: { periods: PayPeriod[]; bills
         <span style={{ fontSize: 11, color: '#7A8BA8' }}>· 13 periods · {freeCount} free {freeCount === 1 ? 'period' : 'periods'}</span>
       </div>
       <div style={{ display: 'grid', gap: 0 }}>
-        {rows.map(({ period, due, isFree, isCurrent }, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '90px 1fr auto',
-              gap: 12,
-              padding: '7px 14px',
-              alignItems: 'center',
-              borderBottom: i < rows.length - 1 ? '1px solid rgba(74,111,165,0.10)' : 'none',
-              background: isCurrent
-                ? 'rgba(74,158,204,0.08)'
-                : isFree
-                  ? 'rgba(39,174,96,0.06)'
-                  : 'transparent',
-            }}
-          >
-            <span style={{
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: 12,
-              color: isCurrent ? '#4A9ECC' : '#A9B5C9',
-              fontWeight: isCurrent ? 600 : 400,
-            }}>
-              {period.payLabel}
-              {isCurrent && <span style={{ marginLeft: 6, fontSize: 10, color: '#4A9ECC' }}>← now</span>}
-            </span>
-            {isFree ? (
-              <span style={{ fontSize: 11, color: '#27AE60' }}>✓ No direct debits</span>
-            ) : (
-              <span style={{ fontSize: 11, color: '#7A8BA8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {due.map(b => b.description).join(' · ')}
-              </span>
-            )}
-            {isFree && (
+        {rows.map(({ period, due, periodicDue, isFree, isCurrent }, i) => {
+          const totallyFree = isFree && periodicDue.length === 0;
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '90px 1fr auto',
+                gap: 12,
+                padding: '7px 14px',
+                alignItems: 'center',
+                borderBottom: i < rows.length - 1 ? '1px solid rgba(74,111,165,0.10)' : 'none',
+                background: isCurrent
+                  ? 'rgba(74,158,204,0.08)'
+                  : totallyFree
+                    ? 'rgba(39,174,96,0.06)'
+                    : 'transparent',
+              }}
+            >
               <span style={{
-                fontSize: 10,
-                padding: '2px 6px',
-                background: 'rgba(39,174,96,0.15)',
-                color: '#27AE60',
-                borderRadius: 2,
                 fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                letterSpacing: '0.04em',
+                fontSize: 12,
+                color: isCurrent ? '#4A9ECC' : '#A9B5C9',
+                fontWeight: isCurrent ? 600 : 400,
               }}>
-                FREE
+                {period.payLabel}
+                {isCurrent && <span style={{ marginLeft: 6, fontSize: 10, color: '#4A9ECC' }}>← now</span>}
               </span>
-            )}
-          </div>
-        ))}
+              <span style={{ fontSize: 11, color: '#7A8BA8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {totallyFree
+                  ? <span style={{ color: '#27AE60' }}>✓ No direct debits this period</span>
+                  : [
+                      ...due.map(b => b.description),
+                      ...periodicDue.map(b => `${b.description} (${b.frequency})`),
+                    ].join(' · ')
+                }
+              </span>
+              {totallyFree && (
+                <span style={{
+                  fontSize: 10,
+                  padding: '2px 6px',
+                  background: 'rgba(39,174,96,0.15)',
+                  color: '#27AE60',
+                  borderRadius: 2,
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                  letterSpacing: '0.04em',
+                }}>
+                  FREE
+                </span>
+              )}
+              {!totallyFree && isFree && periodicDue.length > 0 && (
+                <span style={{
+                  fontSize: 10,
+                  padding: '2px 6px',
+                  background: 'rgba(243,156,18,0.15)',
+                  color: '#F39C12',
+                  borderRadius: 2,
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                }}>
+                  QTRLY
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 // ─── Regular bill tile ────────────────────────────────────────────────────────
-function BillTile({ bill, periods, onToggle, onEdit, onRemove }: {
-  bill: Bill; periods: PayPeriod[];
+function BillTile({ bill, periods, curIdx, onToggle, onEdit, onRemove }: {
+  bill: Bill; periods: PayPeriod[]; curIdx: number;
   onToggle: () => void; onEdit: () => void; onRemove: () => void;
 }) {
+  const isPeriodicFrequency = bill.frequency === 'quarterly' || bill.frequency === 'annual';
+
   const freePeriods = useMemo(() =>
-    bill.ddDay ? freePeriodsFor(periods, bill.ddDay, bill.frequency, bill.ddMonth) : [],
-    [periods, bill.ddDay, bill.frequency, bill.ddMonth]
+    bill.ddDay && !isPeriodicFrequency
+      ? freePeriodsFor(periods, bill.ddDay, bill.frequency, bill.ddMonth)
+      : [],
+    [periods, bill.ddDay, bill.frequency, bill.ddMonth, isPeriodicFrequency]
   );
   const nextFree = freePeriods[0];
+
+  // For quarterly/annual bills, determine if due in the current pay period
+  const periodicStatus = useMemo(() => {
+    if (!isPeriodicFrequency || !bill.ddDay) return null;
+    const isDueNow = curIdx >= 0 && billDueInPeriod(periods[curIdx], bill.ddDay, bill.frequency, bill.ddMonth);
+    if (isDueNow) return { due: true, next: null as Date | null };
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const next = nextOccurrenceAfter(today, bill.ddDay, bill.frequency, bill.ddMonth);
+    return { due: false, next };
+  }, [isPeriodicFrequency, bill.ddDay, bill.frequency, bill.ddMonth, curIdx, periods]);
+
+  const isNotDueNow = periodicStatus && !periodicStatus.due;
 
   return (
     <div
       className="row-hover"
       style={{
         borderBottom: '1px solid rgba(74,111,165,0.12)',
-        borderLeft: `2px solid ${bill.paid ? 'transparent' : catColour(bill.category)}`,
-        background: bill.paid ? 'rgba(122,139,168,0.04)' : 'transparent',
+        borderLeft: `2px solid ${bill.paid ? 'transparent' : isNotDueNow ? 'rgba(122,139,168,0.3)' : catColour(bill.category)}`,
+        background: bill.paid ? 'rgba(122,139,168,0.04)' : isNotDueNow ? 'rgba(122,139,168,0.02)' : 'transparent',
       }}
     >
       {/* Main row */}
@@ -279,12 +321,12 @@ function BillTile({ bill, periods, onToggle, onEdit, onRemove }: {
         <span style={{
           flex: 1,
           fontSize: 14,
-          color: bill.paid ? '#7A8BA8' : '#E8EDF5',
+          color: bill.paid ? '#7A8BA8' : isNotDueNow ? '#7A8BA8' : '#E8EDF5',
           textDecoration: bill.paid ? 'line-through' : 'none',
         }}>
           {bill.description}
         </span>
-        <span className="num" style={{ fontSize: 15, color: bill.paid ? '#7A8BA8' : '#E8EDF5' }}>
+        <span className="num" style={{ fontSize: 15, color: bill.paid ? '#7A8BA8' : isNotDueNow ? '#7A8BA8' : '#E8EDF5' }}>
           {fmtGBP(bill.amount)}
         </span>
         <button className="btn ghost" onClick={onEdit} style={{ padding: '2px 5px' }}><Edit2 size={12} /></button>
@@ -296,7 +338,16 @@ function BillTile({ bill, periods, onToggle, onEdit, onRemove }: {
         {bill.ddDay && (
           <span style={{ fontSize: 11, color: '#7A8BA8' }}>· {ordinal(bill.ddDay)}{bill.ddMonth ? ` ${MONTH_NAMES[bill.ddMonth - 1]}` : ''}</span>
         )}
-        {bill.frequency !== 'monthly' && bill.frequency !== 'weekly' && bill.frequency !== 'fortnightly' && (
+        {/* Quarterly/annual: show due status rather than a monthly-equivalent spread */}
+        {isPeriodicFrequency && periodicStatus && (
+          periodicStatus.due
+            ? <span style={{ fontSize: 11, color: '#F39C12', fontWeight: 600 }}>· Due this period — full {fmtGBP(bill.amount)}</span>
+            : <span style={{ fontSize: 11, color: '#7A8BA8' }}>
+                · Not due this period{periodicStatus.next ? ` · Next: ${fmtDate(periodicStatus.next)}` : ''}
+              </span>
+        )}
+        {/* Non-quarterly: show monthly equivalent and next free period */}
+        {!isPeriodicFrequency && bill.frequency !== 'monthly' && bill.frequency !== 'weekly' && bill.frequency !== 'fortnightly' && (
           <span style={{ fontSize: 11, color: '#7A8BA8' }}>
             · {fmtGBP(toMonthly(bill.amount, bill.frequency), { decimals: 0 })}/mo
           </span>

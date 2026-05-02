@@ -34,7 +34,7 @@ export function PayCalculator({
       value: r.restDaySundayAnnual,
       accent: r.restDaySundayAnnual > 0 ? '#4A9ECC' : '#7A8BA8',
     },
-    { label: 'Annual bonus', value: pay.bonusAnnual, accent: pay.bonusAnnual > 0 ? '#E8EDF5' : '#7A8BA8' },
+    { label: 'Annual bonus (gross)', value: pay.bonusAnnual, accent: pay.bonusAnnual > 0 ? '#E8EDF5' : '#7A8BA8' },
     {
       label: 'Cycle to work',
       value: -r.cycleToWorkAnnual,
@@ -60,7 +60,13 @@ export function PayCalculator({
       value: -r.studentLoan,
       accent: r.studentLoan > 0 ? '#F39C12' : '#7A8BA8',
     },
-    { label: 'Take-home (annual)', value: r.cashAnnual, accent: '#27AE60', bold: true },
+    { label: 'Regular take-home (annual, excl. bonus)', value: r.cashAnnual - r.netBonus, accent: '#4A9ECC', bold: false },
+    ...(pay.bonusAnnual > 0 ? [
+      { label: 'Net bonus (after tax/NI — paid as single lump sum)', value: r.netBonus, accent: '#27AE60', hint: 'one-off payment' },
+      { label: 'Total take-home (annual)', value: r.cashAnnual, accent: '#27AE60', bold: true },
+    ] : [
+      { label: 'Take-home (annual)', value: r.cashAnnual, accent: '#27AE60', bold: true },
+    ]),
   ];
 
   return (
@@ -228,7 +234,7 @@ export function PayCalculator({
 
       <div style={{ display: 'grid', gap: 20, alignContent: 'start' }}>
         <div className="card tick" style={{ padding: 28 }}>
-          <div className="lab">4-weekly take-home</div>
+          <div className="lab">4-weekly take-home{pay.bonusAnnual > 0 ? ' (regular periods)' : ''}</div>
           <div
             className="num"
             style={{ fontSize: 64, color: '#27AE60', lineHeight: 1, marginTop: 12, fontWeight: 500 }}
@@ -236,9 +242,15 @@ export function PayCalculator({
             {fmtGBP(r.cash4Weekly, { decimals: 0 })}
           </div>
           <div style={{ display: 'flex', gap: 24, marginTop: 18, flexWrap: 'wrap' }}>
-            <Stat label="Annual" value={fmtGBP(r.cashAnnual)} />
+            <Stat label="Annual (incl. bonus)" value={fmtGBP(r.cashAnnual)} />
             <Stat label="Monthly" value={fmtGBP(r.cashMonthly)} />
             <Stat label="Weekly" value={fmtGBP(r.cashWeekly)} />
+            {pay.bonusAnnual > 0 && (
+              <Stat label="Net bonus (lump sum)" value={fmtGBP(r.netBonus)} accent="#F39C12" />
+            )}
+            {pay.bonusAnnual > 0 && (
+              <Stat label="Bonus period take-home" value={fmtGBP(r.cash4WeeklyBonusPeriod, { decimals: 0 })} accent="#F39C12" />
+            )}
             <Stat label="Effective tax" value={fmtPct(r.effectiveTaxRate, 1)} />
             <Stat label="Marginal rate" value={fmtPct(r.marginal, 0)} />
             <Stat label="Allowance applied" value={fmtGBP(r.allowance)} />
@@ -336,11 +348,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div>
       <div className="lab">{label}</div>
-      <div className="num" style={{ fontSize: 20, marginTop: 4, fontWeight: 500 }}>{value}</div>
+      <div className="num" style={{ fontSize: 20, marginTop: 4, fontWeight: 500, color: accent }}>{value}</div>
     </div>
   );
 }

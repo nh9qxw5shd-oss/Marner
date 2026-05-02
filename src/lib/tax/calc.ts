@@ -51,10 +51,12 @@ export interface PayResult {
   incomeTax: number;
   ni: number;
   studentLoan: number;
-  cashAnnual: number;
-  cash4Weekly: number;
-  cashMonthly: number;
-  cashWeekly: number;
+  cashAnnual: number;       // total annual take-home including bonus
+  cash4Weekly: number;      // regular per-period take-home WITHOUT bonus
+  cashMonthly: number;      // regular monthly take-home WITHOUT bonus
+  cashWeekly: number;       // regular weekly take-home WITHOUT bonus
+  netBonus: number;         // net after-tax bonus (paid as one lump sum)
+  cash4WeeklyBonusPeriod: number; // take-home in the period the bonus is received
   effectiveTaxRate: number;
   marginal: number;
   allowance: number;
@@ -230,6 +232,14 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     cashAnnual = grossAnnualPreSac - preTaxExtra - incomeTax - ni - studentLoan - pensionFromNet;
   }
 
+  // Isolate the net bonus as a single payment — recalculate without bonus to find regular pay.
+  // The recursive call is safe: it passes bonusAnnual=0 so will not recurse further.
+  const cashAnnualNoBonus = cfg.bonusAnnual
+    ? calcTakeHome({ ...cfg, bonusAnnual: 0 }).cashAnnual
+    : cashAnnual;
+  const netBonusPayment = cashAnnual - cashAnnualNoBonus;
+  const regularPeriodCash = cashAnnualNoBonus / PERIODS_PER_YEAR;
+
   return {
     grossAnnualPreSac,
     opsAllowanceAnnual,
@@ -245,9 +255,11 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     ni,
     studentLoan,
     cashAnnual,
-    cash4Weekly: cashAnnual / PERIODS_PER_YEAR,
-    cashMonthly: cashAnnual / 12,
-    cashWeekly: cashAnnual / 52,
+    cash4Weekly: regularPeriodCash,
+    cashMonthly: cashAnnualNoBonus / 12,
+    cashWeekly: cashAnnualNoBonus / 52,
+    netBonus: netBonusPayment,
+    cash4WeeklyBonusPeriod: regularPeriodCash + netBonusPayment,
     effectiveTaxRate:
       grossAnnualPreSac > 0 ? (incomeTax + ni + studentLoan) / grossAnnualPreSac : 0,
     marginal: computeMarginalRate(grossForTax, cfg.region),

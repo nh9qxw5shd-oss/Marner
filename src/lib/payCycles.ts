@@ -18,6 +18,10 @@ function fmtShort(d: Date): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+export function fmtDate(d: Date): string {
+  return fmtShort(d);
+}
+
 function parseISO(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -99,6 +103,19 @@ export function billDueInPeriod(
   ddMonth: number | null,
 ): boolean {
   return occurrencesInRange(period.payDate, period.end, ddDay, frequency, ddMonth).length > 0;
+}
+
+// Returns the next date this bill falls on after `from` (exclusive).
+export function nextOccurrenceAfter(
+  from: Date,
+  ddDay: number,
+  frequency: BillFrequency,
+  ddMonth: number | null,
+): Date | null {
+  const next = addDays(from, 1);
+  const far = addDays(from, 400);
+  const occ = occurrencesInRange(next, far, ddDay, frequency, ddMonth);
+  return occ.length > 0 ? occ[0] : null;
 }
 
 // Returns periods (within the given window) that contain no payment for this bill.
