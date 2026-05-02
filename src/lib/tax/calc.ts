@@ -19,7 +19,13 @@ import {
 
 export interface PayConfig {
   baseSalary: number;
-  overtimeMonthly: number;
+  contractHoursPerWeek: number;
+  opsAllowancePct: number;
+  restDayHoursPer4W: number;
+  sundayRestDayHoursPer4W: number;
+  competencePayment4W: number;
+  cycleToWork4W: number;
+  healthcare4W: number;
   bonusAnnual: number;
   pensionPct: number;
   pensionType: PensionType;
@@ -27,10 +33,17 @@ export interface PayConfig {
   region: Region;
   studentLoanPlan: StudentLoanPlan;
   hasPostgrad: boolean;
+  nextPayDate: string;     // 'YYYY-MM-DD' — first/next 4-weekly pay date
+  payIntervalDays: number; // 28 for 4-weekly
 }
 
 export interface PayResult {
   grossAnnualPreSac: number;
+  opsAllowanceAnnual: number;
+  restDaySundayAnnual: number;
+  competencePaymentAnnual: number;
+  cycleToWorkAnnual: number;
+  healthcareAnnual: number;
   grossForTax: number;
   grossForNI: number;
   pensionContrib: number;
@@ -39,6 +52,7 @@ export interface PayResult {
   ni: number;
   studentLoan: number;
   cashAnnual: number;
+  cash4Weekly: number;
   cashMonthly: number;
   cashWeekly: number;
   effectiveTaxRate: number;
@@ -146,23 +160,40 @@ function computeMarginalRate(grossForTax: number, region: Region): number {
 }
 
 export function calcTakeHome(cfg: PayConfig): PayResult {
-  const grossAnnualPreSac =
-    (cfg.baseSalary || 0) + (cfg.overtimeMonthly || 0) * 12 + (cfg.bonusAnnual || 0);
+  const PERIODS_PER_YEAR = 13; // 52 weeks / 4-weekly
 
-  const pensionContrib = (cfg.baseSalary || 0) * ((cfg.pensionPct || 0) / 100);
+  const base = cfg.baseSalary || 0;
+  const hourlyRate = base / 52 / (cfg.contractHoursPerWeek || 35);
+  const opsAllowanceAnnual = base * ((cfg.opsAllowancePct || 0) / 100);
+  const restDayExtra   = hourlyRate * 1.25 * (cfg.restDayHoursPer4W || 0) * PERIODS_PER_YEAR;
+  const sundayExtra    = hourlyRate * 1.50 * (cfg.sundayRestDayHoursPer4W || 0) * PERIODS_PER_YEAR;
+  const restDaySundayAnnual = restDayExtra + sundayExtra;
+  const competencePaymentAnnual = (cfg.competencePayment4W || 0) * PERIODS_PER_YEAR;
+  const cycleToWorkAnnual = (cfg.cycleToWork4W || 0) * PERIODS_PER_YEAR;
+  const healthcareAnnual  = (cfg.healthcare4W  || 0) * PERIODS_PER_YEAR;
+
+  const grossAnnualPreSac =
+    base + opsAllowanceAnnual + restDaySundayAnnual + competencePaymentAnnual + (cfg.bonusAnnual || 0);
+
+  // Pension calculated on base salary only (ops allowance and extras are non-pensionable)
+  const pensionContrib = base * ((cfg.pensionPct || 0) / 100);
 
   let grossForTax = grossAnnualPreSac;
-  let grossForNI = grossAnnualPreSac;
+  let grossForNI  = grossAnnualPreSac;
   let pensionFromNet = 0;
 
   if (cfg.pensionType === 'salary_sacrifice') {
     grossForTax -= pensionContrib;
-    grossForNI -= pensionContrib;
+    grossForNI  -= pensionContrib;
   } else if (cfg.pensionType === 'net_pay') {
     grossForTax -= pensionContrib;
   } else {
     pensionFromNet = pensionContrib;
   }
+
+  // Cycle to work and healthcare are pre-tax salary sacrifice — reduce both tax and NI bases
+  grossForTax -= cycleToWorkAnnual + healthcareAnnual;
+  grossForNI  -= cycleToWorkAnnual + healthcareAnnual;
 
   const { allowance: codeAllowance, rule } = parseTaxCode(cfg.taxCode);
 
@@ -187,17 +218,25 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   const ni = calcNI(grossForNI);
   const studentLoan = calcStudentLoan(grossAnnualPreSac, cfg.studentLoanPlan, cfg.hasPostgrad);
 
+  // grossForTax already has pension (if salary_sacrifice) + cycle-to-work + healthcare deducted.
+  // For other pension types we subtract the non-sacrifice items explicitly.
+  const preTaxExtra = cycleToWorkAnnual + healthcareAnnual;
   let cashAnnual: number;
   if (cfg.pensionType === 'salary_sacrifice') {
     cashAnnual = grossForTax - incomeTax - ni - studentLoan;
   } else if (cfg.pensionType === 'net_pay') {
-    cashAnnual = grossAnnualPreSac - pensionContrib - incomeTax - ni - studentLoan;
+    cashAnnual = grossAnnualPreSac - pensionContrib - preTaxExtra - incomeTax - ni - studentLoan;
   } else {
-    cashAnnual = grossAnnualPreSac - incomeTax - ni - studentLoan - pensionFromNet;
+    cashAnnual = grossAnnualPreSac - preTaxExtra - incomeTax - ni - studentLoan - pensionFromNet;
   }
 
   return {
     grossAnnualPreSac,
+    opsAllowanceAnnual,
+    restDaySundayAnnual,
+    competencePaymentAnnual,
+    cycleToWorkAnnual,
+    healthcareAnnual,
     grossForTax,
     grossForNI,
     pensionContrib,
@@ -206,6 +245,7 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     ni,
     studentLoan,
     cashAnnual,
+    cash4Weekly: cashAnnual / PERIODS_PER_YEAR,
     cashMonthly: cashAnnual / 12,
     cashWeekly: cashAnnual / 52,
     effectiveTaxRate:

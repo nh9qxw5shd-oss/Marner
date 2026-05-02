@@ -174,8 +174,6 @@ export function App() {
     []
   );
 
-  const total = useMemo(() => bills.reduce((s, b) => s + Number(b.amount || 0), 0), [bills]);
-
   return (
     <>
       <Header tab={tab} setTab={setTab} />
@@ -211,7 +209,8 @@ export function App() {
               <Bills
                 bills={bills}
                 balance={balance}
-                total={total}
+                nextPayDate={pay.nextPayDate}
+                payIntervalDays={pay.payIntervalDays}
                 onSetBalance={updateBalance}
                 onAdd={addBill}
                 onToggle={togglePaid}
