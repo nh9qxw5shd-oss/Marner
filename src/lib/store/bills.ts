@@ -48,7 +48,7 @@ export async function listBills(): Promise<Bill[]> {
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return (data ?? []).map(mapRow);
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapRow);
 }
 
 export async function insertBill(bill: Omit<Bill, 'id'>): Promise<Bill> {
@@ -59,7 +59,7 @@ export async function insertBill(bill: Omit<Bill, 'id'>): Promise<Bill> {
     .select(SELECT_COLS)
     .single();
   if (error) throw error;
-  return mapRow(data);
+  return mapRow(data as unknown as Record<string, unknown>);
 }
 
 export async function updateBill(
@@ -84,7 +84,7 @@ export async function bulkInsertBills(bills: Omit<Bill, 'id'>[]): Promise<Bill[]
     .insert(bills.map(toRow))
     .select(SELECT_COLS);
   if (error) throw error;
-  return (data ?? []).map(mapRow);
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(mapRow);
 }
 
 export async function deleteAllBills(): Promise<void> {
