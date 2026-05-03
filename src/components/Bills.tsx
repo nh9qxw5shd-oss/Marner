@@ -63,15 +63,21 @@ export function Bills({
 
   // Monthly-equivalent totals
   const totals = useMemo(() => {
-    const monthly = bills.reduce((s, b) => s + toMonthly(b.isBudget ? b.amount : b.amount, b.frequency), 0);
-    const paidMonthly = bills.filter(b => b.paid).reduce((s, b) => s + toMonthly(b.amount, b.frequency), 0);
+    const monthly = bills.reduce((s, b) => s + toMonthly(b.amount, b.frequency), 0);
+    const currentPeriod = curIdx >= 0 ? periods[curIdx] : null;
     const outstanding = bills.reduce((s, b) => {
+      if (b.paid) return s;
       if (b.isBudget) return s + toMonthly(Math.max(0, b.amount - (b.spent || 0)), b.frequency);
-      return b.paid ? s : s + toMonthly(b.amount, b.frequency);
+      // Quarterly/annual: only count the full stated amount when actually due this period
+      if ((b.frequency === 'quarterly' || b.frequency === 'annual') && b.ddDay) {
+        if (!currentPeriod) return s;
+        return billDueInPeriod(currentPeriod, b.ddDay, b.frequency, b.ddMonth) ? s + b.amount : s;
+      }
+      return s + toMonthly(b.amount, b.frequency);
     }, 0);
     const projected = Number(balance || 0) - outstanding;
-    return { monthly, paidMonthly, outstanding, projected };
-  }, [bills, balance]);
+    return { monthly, outstanding, projected };
+  }, [bills, balance, periods, curIdx]);
 
   // Group by category
   const categories = useMemo(() => {
