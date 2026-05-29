@@ -21,13 +21,14 @@ function catColour(cat: string) { return CAT_COLOURS[cat] ?? '#7A8BA8'; }
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface SoundboardProps {
   bills: Bill[];
+  sandbox: Bill[];
   balance: number;
+  onSandboxChange: (sb: Bill[]) => void;
   onApply: (sandbox: Bill[]) => Promise<Bill[]>;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function Soundboard({ bills, balance, onApply }: SoundboardProps) {
-  const [sandbox, setSandbox] = useState<Bill[]>(() => [...bills]);
+export function Soundboard({ bills, sandbox, balance, onSandboxChange, onApply }: SoundboardProps) {
   const [editId, setEditId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -60,33 +61,33 @@ export function Soundboard({ bills, balance, onApply }: SoundboardProps) {
   const sandboxProjected = balance - sandboxMonthly;
 
   const reset = useCallback(() => {
-    setSandbox([...bills]);
+    onSandboxChange([...bills]);
     setEditId(null);
     setShowAdd(false);
-  }, [bills]);
+  }, [bills, onSandboxChange]);
 
   const handleApply = useCallback(async () => {
     setApplying(true);
     try {
       const newBills = await onApply(sandbox);
-      setSandbox([...newBills]);
+      onSandboxChange([...newBills]);
     } finally {
       setApplying(false);
     }
-  }, [onApply, sandbox]);
+  }, [onApply, sandbox, onSandboxChange]);
 
   // ── Sandbox mutations ──
   const addBill = useCallback((bill: Omit<Bill, 'id' | 'position'>) => {
-    setSandbox(prev => [...prev, { ...bill, id: `__sb_${Date.now()}`, position: prev.length }]);
-  }, []);
+    onSandboxChange([...sandbox, { ...bill, id: `__sb_${Date.now()}`, position: sandbox.length }]);
+  }, [sandbox, onSandboxChange]);
 
   const editBill = useCallback((id: string, patch: Partial<Omit<Bill, 'id'>>) => {
-    setSandbox(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b));
-  }, []);
+    onSandboxChange(sandbox.map(b => b.id === id ? { ...b, ...patch } : b));
+  }, [sandbox, onSandboxChange]);
 
   const removeBill = useCallback((id: string) => {
-    setSandbox(prev => prev.filter(b => b.id !== id));
-  }, []);
+    onSandboxChange(sandbox.filter(b => b.id !== id));
+  }, [sandbox, onSandboxChange]);
 
   const categories = useMemo(() => {
     const m = new Map<string, Bill[]>();

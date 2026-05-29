@@ -20,6 +20,8 @@ import type { Bill, PayConfig } from '@/lib/types';
 
 type Tab = 'bills' | 'pay' | 'soundboard' | 'data';
 
+const SANDBOX_KEY = 'marner_soundboard_v1';
+
 export function App() {
   const [tab, setTab] = useState<Tab>('bills');
   const [loaded, setLoaded] = useState(false);
@@ -27,6 +29,10 @@ export function App() {
   const [balance, setBalanceState] = useState(0);
   const [pay, setPayState] = useState<PayConfig>(DEFAULT_PAY);
   const [error, setError] = useState<string | null>(null);
+
+  // Sandbox state — lives in App so it survives tab switches
+  const [sandbox, setSandbox] = useState<Bill[]>([]);
+  const [sandboxReady, setSandboxReady] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -40,6 +46,14 @@ export function App() {
           setBalanceState(cfg.balance ?? 0);
           setPayState({ ...DEFAULT_PAY, ...(cfg.pay_config as PayConfig) });
         }
+        // Restore sandbox from localStorage, falling back to a copy of current bills
+        try {
+          const raw = localStorage.getItem(SANDBOX_KEY);
+          setSandbox(raw ? (JSON.parse(raw) as Bill[]) : [...bs]);
+        } catch {
+          setSandbox([...bs]);
+        }
+        setSandboxReady(true);
       } catch (e) {
         console.error('Load failed:', e);
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load.');
@@ -51,6 +65,16 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  // Persist sandbox to localStorage whenever it changes
+  useEffect(() => {
+    if (!sandboxReady) return;
+    try {
+      localStorage.setItem(SANDBOX_KEY, JSON.stringify(sandbox));
+    } catch {
+      // storage quota or private-browse — silently ignore
+    }
+  }, [sandbox, sandboxReady]);
 
   // ---------- Bill actions ----------
   const addBill = useCallback(
@@ -278,7 +302,13 @@ export function App() {
             )}
             {tab === 'pay' && <PayCalculator pay={pay} onChange={updatePay} />}
             {tab === 'soundboard' && (
-              <Soundboard bills={bills} balance={balance} onApply={applySandbox} />
+              <Soundboard
+                bills={bills}
+                sandbox={sandbox}
+                balance={balance}
+                onSandboxChange={setSandbox}
+                onApply={applySandbox}
+              />
             )}
             {tab === 'data' && (
               <DataTab
