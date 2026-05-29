@@ -10,6 +10,7 @@ html, body {
   font-family: 'Inter Tight', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 .marner-root {
@@ -226,6 +227,12 @@ button.btn.ghost {
   z-index: 0;
 }
 
+.pay-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 24px;
+}
+
 @media (max-width: 720px) {
   .hide-mobile {
     display: none;
@@ -240,8 +247,12 @@ button.btn.ghost {
   .page-content {
     padding: 20px 16px 80px !important;
   }
-}
 
-html, body {
-  overflow-x: hidden;
+  .pay-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pay-inputs {
+    position: static !important;
+  }
 }
