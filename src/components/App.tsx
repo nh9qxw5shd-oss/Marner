@@ -16,11 +16,10 @@ import {
   updateBill,
 } from '@/lib/store/bills';
 import { getConfig, setBalance, setPayConfig } from '@/lib/store/config';
+import { loadSandbox, saveSandbox } from '@/lib/store/soundboard';
 import type { Bill, PayConfig } from '@/lib/types';
 
 type Tab = 'bills' | 'pay' | 'soundboard' | 'data';
-
-const SANDBOX_KEY = 'marner_soundboard_v1';
 
 export function App() {
   const [tab, setTab] = useState<Tab>('bills');
@@ -39,20 +38,14 @@ export function App() {
     let cancelled = false;
     (async () => {
       try {
-        const [bs, cfg] = await Promise.all([listBills(), getConfig()]);
+        const [bs, cfg, saved] = await Promise.all([listBills(), getConfig(), loadSandbox()]);
         if (cancelled) return;
         setBills(bs);
         if (cfg) {
           setBalanceState(cfg.balance ?? 0);
           setPayState({ ...DEFAULT_PAY, ...(cfg.pay_config as PayConfig) });
         }
-        // Restore sandbox from localStorage, falling back to a copy of current bills
-        try {
-          const raw = localStorage.getItem(SANDBOX_KEY);
-          setSandbox(raw ? (JSON.parse(raw) as Bill[]) : [...bs]);
-        } catch {
-          setSandbox([...bs]);
-        }
+        setSandbox(saved ?? [...bs]);
         setSandboxReady(true);
       } catch (e) {
         console.error('Load failed:', e);
@@ -66,14 +59,13 @@ export function App() {
     };
   }, []);
 
-  // Persist sandbox to localStorage whenever it changes
+  // Persist sandbox to Supabase (debounced)
   useEffect(() => {
     if (!sandboxReady) return;
-    try {
-      localStorage.setItem(SANDBOX_KEY, JSON.stringify(sandbox));
-    } catch {
-      // storage quota or private-browse — silently ignore
-    }
+    const t = setTimeout(() => {
+      saveSandbox(sandbox).catch((e) => console.error('Sandbox save failed:', e));
+    }, 400);
+    return () => clearTimeout(t);
   }, [sandbox, sandboxReady]);
 
   // ---------- Bill actions ----------
