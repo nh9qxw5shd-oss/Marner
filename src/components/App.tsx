@@ -234,6 +234,7 @@ export function App() {
     <>
       <Header tab={tab} setTab={setTab} />
       <div
+        className="page-content"
         style={{
           maxWidth: 1280,
           margin: '0 auto',

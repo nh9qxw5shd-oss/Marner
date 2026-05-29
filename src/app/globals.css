@@ -13,12 +13,13 @@ html, body {
 }
 
 .marner-root {
-  min-height: 100vh;
+  min-height: 100dvh;
   background-image:
     radial-gradient(circle at 90% -10%, rgba(224, 82, 6, 0.10) 0%, transparent 45%),
     linear-gradient(rgba(74, 111, 165, 0.18) 1px, transparent 1px),
     linear-gradient(90deg, rgba(74, 111, 165, 0.18) 1px, transparent 1px);
   background-size: auto, 48px 48px, 48px 48px;
+  background-attachment: fixed;
 }
 
 .panel {
@@ -153,6 +154,21 @@ button.btn.ghost {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .tab.active {
@@ -214,4 +230,18 @@ button.btn.ghost {
   .hide-mobile {
     display: none;
   }
+
+  .tab {
+    padding: 12px 14px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+
+  .page-content {
+    padding: 20px 16px 80px !important;
+  }
+}
+
+html, body {
+  overflow-x: hidden;
 }

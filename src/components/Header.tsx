@@ -21,14 +21,14 @@ export function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
         style={{
           maxWidth: 1280,
           margin: '0 auto',
-          padding: '14px 24px',
+          padding: '0 24px',
           display: 'flex',
-          alignItems: 'center',
-          gap: 24,
-          flexWrap: 'wrap',
+          alignItems: 'stretch',
+          gap: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Logo — fixed width, vertically centred */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0', marginRight: 24, flexShrink: 0 }}>
           <div style={{ width: 10, height: 10, background: '#E05206', borderRadius: 1 }} />
           <div>
             <div
@@ -42,8 +42,8 @@ export function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
             </div>
           </div>
         </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {/* Tab bar — scrolls horizontally on narrow viewports */}
+        <div className="tab-bar" style={{ flex: 1, minWidth: 0 }}>
           <button
             className={`tab ${tab === 'bills' ? 'active' : ''}`}
             onClick={() => setTab('bills')}
