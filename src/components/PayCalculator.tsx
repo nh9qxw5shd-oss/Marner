@@ -70,8 +70,8 @@ export function PayCalculator({
   ];
 
   return (
-    <div className="pay-grid">
-      <div className="panel pay-inputs" style={{ padding: 20, alignSelf: 'start', position: 'sticky', top: 80 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 24, alignItems: 'start' }}>
+      <div className="panel" style={{ padding: 20 }}>
         <div className="lab" style={{ marginBottom: 14 }}>Inputs</div>
 
         <Field label="Annual headline salary">

@@ -490,13 +490,13 @@ function EditTile({ bill, onSave, onCancel }: {
 
   return (
     <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(74,111,165,0.18)', background: 'rgba(224,82,6,0.04)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 8, marginBottom: 8 }}>
         <input value={d.description} onChange={e => setD({ ...d, description: e.target.value })} placeholder="Description" />
         <input type="number" value={d.amount} onChange={e => setD({ ...d, amount: e.target.value })} placeholder="Amount £" />
         <input value={d.category} onChange={e => setD({ ...d, category: e.target.value })} placeholder="Category" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px auto', gap: 8, alignItems: 'center' }}>
-        <select value={d.frequency} onChange={e => setD({ ...d, frequency: e.target.value as BillFrequency })}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <select style={{ flex: '1 1 120px', width: 'auto', minWidth: 0 }} value={d.frequency} onChange={e => setD({ ...d, frequency: e.target.value as BillFrequency })}>
           <option value="monthly">Monthly</option>
           <option value="quarterly">Quarterly</option>
           <option value="annual">Annual</option>
@@ -504,21 +504,19 @@ function EditTile({ bill, onSave, onCancel }: {
           <option value="fortnightly">Fortnightly</option>
         </select>
         <input
-          type="number"
+          type="number" style={{ flex: '0 0 72px', width: 72 }}
           value={d.ddDay}
           onChange={e => setD({ ...d, ddDay: e.target.value })}
           placeholder="DD day"
           min={1} max={31}
         />
-        {needsMonth ? (
-          <select value={d.ddMonth} onChange={e => setD({ ...d, ddMonth: e.target.value })}>
+        {needsMonth && (
+          <select style={{ flex: '1 1 80px', width: 'auto', minWidth: 0 }} value={d.ddMonth} onChange={e => setD({ ...d, ddMonth: e.target.value })}>
             <option value="">Month…</option>
             {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </select>
-        ) : (
-          <div />
         )}
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', flexShrink: 0 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#A9B5C9', cursor: 'pointer' }}>
             <input type="checkbox" checked={d.isBudget} onChange={e => setD({ ...d, isBudget: e.target.checked })} />
             Budget
@@ -566,7 +564,7 @@ function AddForm({ onAdd, onCancel }: {
 
   return (
     <div className="panel" style={{ padding: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 8, marginBottom: 8 }}>
         <input
           placeholder="Description (e.g. Mortgage)"
           value={d.description}
@@ -587,8 +585,8 @@ function AddForm({ onAdd, onCancel }: {
           onKeyDown={e => e.key === 'Enter' && add()}
         />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 1fr auto', gap: 8, alignItems: 'center' }}>
-        <select value={d.frequency} onChange={e => setD({ ...d, frequency: e.target.value as BillFrequency })}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <select style={{ flex: '1 1 120px', width: 'auto', minWidth: 0 }} value={d.frequency} onChange={e => setD({ ...d, frequency: e.target.value as BillFrequency })}>
           <option value="monthly">Monthly</option>
           <option value="quarterly">Quarterly</option>
           <option value="annual">Annual</option>
@@ -597,22 +595,21 @@ function AddForm({ onAdd, onCancel }: {
         </select>
         <input
           type="number" placeholder="DD day" min={1} max={31}
+          style={{ flex: '0 0 72px', width: 72 }}
           value={d.ddDay}
           onChange={e => setD({ ...d, ddDay: e.target.value })}
         />
-        {needsMonth ? (
-          <select value={d.ddMonth} onChange={e => setD({ ...d, ddMonth: e.target.value })}>
+        {needsMonth && (
+          <select style={{ flex: '1 1 90px', width: 'auto', minWidth: 0 }} value={d.ddMonth} onChange={e => setD({ ...d, ddMonth: e.target.value })}>
             <option value="">Month…</option>
             {MONTH_NAMES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </select>
-        ) : (
-          <div />
         )}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#A9B5C9', cursor: 'pointer' }}>
+        <label style={{ flex: '1 1 130px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#A9B5C9', cursor: 'pointer' }}>
           <input type="checkbox" checked={d.isBudget} onChange={e => setD({ ...d, isBudget: e.target.checked })} />
           Spending budget
         </label>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button className="btn primary" onClick={add}><Plus size={13} /> Add</button>
           <button className="btn ghost" onClick={onCancel}><X size={13} /></button>
         </div>
