@@ -5,6 +5,7 @@ import { Header } from './Header';
 import { Bills } from './Bills';
 import { PayCalculator } from './PayCalculator';
 import { DataTab } from './DataTab';
+import { Soundboard } from './Soundboard';
 import { DEFAULT_PAY } from '@/lib/defaults';
 import {
   bulkInsertBills,
@@ -17,7 +18,7 @@ import {
 import { getConfig, setBalance, setPayConfig } from '@/lib/store/config';
 import type { Bill, PayConfig } from '@/lib/types';
 
-type Tab = 'bills' | 'pay' | 'data';
+type Tab = 'bills' | 'pay' | 'soundboard' | 'data';
 
 export function App() {
   const [tab, setTab] = useState<Tab>('bills');
@@ -116,6 +117,61 @@ export function App() {
         setBills(prev);
         console.error(e);
       }
+    },
+    [bills]
+  );
+
+  // ---------- Soundboard apply ----------
+  const applySandbox = useCallback(
+    async (sandboxBills: Bill[]): Promise<Bill[]> => {
+      const baseMap     = new Map(bills.map(b => [b.id, b]));
+      const sandboxIds  = new Set(sandboxBills.map(b => b.id));
+      const toRemove    = bills.filter(b => !sandboxIds.has(b.id));
+      const toAdd       = sandboxBills.filter(b => !baseMap.has(b.id));
+      const toUpdate    = sandboxBills.filter(b => {
+        const base = baseMap.get(b.id);
+        if (!base) return false;
+        return (
+          base.amount      !== b.amount      ||
+          base.description !== b.description ||
+          base.frequency   !== b.frequency   ||
+          base.category    !== b.category    ||
+          base.ddDay       !== b.ddDay       ||
+          base.ddMonth     !== b.ddMonth
+        );
+      });
+
+      await Promise.all([
+        ...toRemove.map(b => deleteBill(b.id)),
+        ...toUpdate.map(b =>
+          updateBill(b.id, {
+            amount:      b.amount,
+            description: b.description,
+            frequency:   b.frequency,
+            category:    b.category,
+            ddDay:       b.ddDay,
+            ddMonth:     b.ddMonth,
+          })
+        ),
+      ]);
+
+      const inserted = toAdd.length > 0
+        ? await bulkInsertBills(
+            toAdd.map((b, i) => ({ ...b, position: bills.length + i }))
+          )
+        : [];
+
+      let newBills: Bill[] = [];
+      setBills(prev => {
+        const removedIds  = new Set(toRemove.map(b => b.id));
+        const updatedMap  = new Map(toUpdate.map(b => [b.id, b]));
+        const kept = prev
+          .filter(b => !removedIds.has(b.id))
+          .map(b    => ({ ...(updatedMap.get(b.id) ?? b) }));
+        newBills = [...kept, ...inserted];
+        return newBills;
+      });
+      return newBills;
     },
     [bills]
   );
@@ -220,6 +276,9 @@ export function App() {
               />
             )}
             {tab === 'pay' && <PayCalculator pay={pay} onChange={updatePay} />}
+            {tab === 'soundboard' && (
+              <Soundboard bills={bills} balance={balance} onApply={applySandbox} />
+            )}
             {tab === 'data' && (
               <DataTab
                 bills={bills}

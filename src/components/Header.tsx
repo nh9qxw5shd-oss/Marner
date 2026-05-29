@@ -1,9 +1,9 @@
 'use client';
 
-import { Calculator, Database, Wallet } from 'lucide-react';
+import { Calculator, Database, SlidersHorizontal, Wallet } from 'lucide-react';
 import { TAX_YEAR_LABEL } from '@/lib/tax/constants';
 
-type Tab = 'bills' | 'pay' | 'data';
+type Tab = 'bills' | 'pay' | 'soundboard' | 'data';
 
 export function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   return (
@@ -57,6 +57,13 @@ export function Header({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) 
           >
             <Calculator size={14} />
             Take-home
+          </button>
+          <button
+            className={`tab ${tab === 'soundboard' ? 'active' : ''}`}
+            onClick={() => setTab('soundboard')}
+          >
+            <SlidersHorizontal size={14} />
+            Soundboard
           </button>
           <button
             className={`tab ${tab === 'data' ? 'active' : ''}`}
