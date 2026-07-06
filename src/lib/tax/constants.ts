@@ -12,32 +12,39 @@ export const PA_TAPER_START     = 100_000;
 export const PA_TAPER_END       = 125_140;
 
 /**
- * rUK income tax bands, expressed as cumulative caps ABOVE the personal allowance.
- *  Basic 20%:    £12,571 – £50,270   → 37,700 above PA
- *  Higher 40%:   £50,271 – £125,140  → 112,570 above PA
- *  Additional:   £125,141+
+ * rUK income tax bands, expressed as cumulative caps of TAXABLE income
+ * (income after allowances). These are the statutory limits: basic rate
+ * limit £37,700, higher rate limit £125,140. Note the higher rate limit is
+ * NOT £125,140 − PA: the personal allowance is fully tapered away before
+ * income reaches £125,140, so the additional rate starts at £125,140 of
+ * taxable income (e.g. £130k income → £130k taxable → £4,860 at 45%).
+ *  Basic 20%:    first £37,700 of taxable income (£12,571 – £50,270 with full PA)
+ *  Higher 40%:   £37,701 – £125,140 taxable
+ *  Additional:   above £125,140 taxable
  */
 export const RUK_BANDS = [
   { rate: 0.20, upTo: 37_700 },
-  { rate: 0.40, upTo: 112_570 },
+  { rate: 0.40, upTo: 125_140 },
   { rate: 0.45, upTo: Infinity },
 ] as const;
 
 /**
- * Scottish income tax bands, cumulative caps ABOVE the personal allowance.
- *  Starter 19%:        £12,571 – £15,397    → 2,827
- *  Basic 20%:          £15,398 – £29,526    → 16,956
- *  Intermediate 21%:   £29,527 – £43,662    → 31,092
- *  Higher 42%:         £43,663 – £75,000    → 62,430
- *  Advanced 45%:       £75,001 – £125,140   → 112,570
- *  Top 48%:            £125,141+
+ * Scottish income tax bands, cumulative caps of TAXABLE income (after
+ * allowances). As with rUK, the top-rate limit is £125,140 of taxable
+ * income — the PA is fully tapered away before that point.
+ *  Starter 19%:        £12,571 – £15,397 with full PA  → first 2,827 taxable
+ *  Basic 20%:          £15,398 – £29,526               → to 16,956
+ *  Intermediate 21%:   £29,527 – £43,662               → to 31,092
+ *  Higher 42%:         £43,663 – £75,000               → to 62,430
+ *  Advanced 45%:       to £125,140 taxable
+ *  Top 48%:            above £125,140 taxable
  */
 export const SCOTLAND_BANDS = [
   { rate: 0.19, upTo: 2_827 },
   { rate: 0.20, upTo: 16_956 },
   { rate: 0.21, upTo: 31_092 },
   { rate: 0.42, upTo: 62_430 },
-  { rate: 0.45, upTo: 112_570 },
+  { rate: 0.45, upTo: 125_140 },
   { rate: 0.48, upTo: Infinity },
 ] as const;
 

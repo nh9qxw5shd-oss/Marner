@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { NumericInput } from './NumericInput';
+import { NullableNumericInput, NumericInput } from './NumericInput';
 import { calcTakeHome } from '@/lib/tax/calc';
 import { fmtGBP, fmtPct } from '@/lib/format';
 import type { PayConfig } from '@/lib/types';
@@ -14,6 +14,16 @@ export function PayCalculator({
   onChange: (patch: Partial<PayConfig>) => void;
 }) {
   const r = useMemo(() => calcTakeHome(pay), [pay]);
+
+  // The one-off lump paid in the coming period: bonus + this-period-only overtime.
+  const lumpGross = pay.bonusAnnual + r.oneOffExtraGross;
+  const hasLump = lumpGross !== 0;
+  const lumpLabel =
+    pay.bonusAnnual > 0 && r.oneOffExtraGross !== 0
+      ? 'bonus + one-off OT'
+      : pay.bonusAnnual > 0
+        ? 'bonus'
+        : 'one-off OT';
 
   const breakdown = [
     { label: 'Base salary', value: pay.baseSalary, accent: '#E8EDF5' },
@@ -33,6 +43,9 @@ export function PayCalculator({
       label: 'Rest day / Sunday pay',
       value: r.restDaySundayAnnual,
       accent: r.restDaySundayAnnual > 0 ? '#4A9ECC' : '#7A8BA8',
+      hint: r.oneOffExtraGross !== 0
+        ? `incl. ${fmtGBP(r.oneOffExtraGross)} one-off this period`
+        : undefined,
     },
     { label: 'Annual bonus (gross)', value: pay.bonusAnnual, accent: pay.bonusAnnual > 0 ? '#E8EDF5' : '#7A8BA8' },
     {
@@ -60,9 +73,9 @@ export function PayCalculator({
       value: -r.studentLoan,
       accent: r.studentLoan > 0 ? '#F39C12' : '#7A8BA8',
     },
-    { label: 'Regular take-home (annual, excl. bonus)', value: r.cashAnnual - r.netBonus, accent: '#4A9ECC', bold: false },
-    ...(pay.bonusAnnual > 0 ? [
-      { label: 'Net bonus (after tax/NI — paid as single lump sum)', value: r.netBonus, accent: '#27AE60', hint: 'one-off payment' },
+    { label: 'Regular take-home (annual, excl. one-offs)', value: r.cashAnnual - r.netBonus, accent: '#4A9ECC', bold: false },
+    ...(hasLump ? [
+      { label: `Net ${lumpLabel} (after tax/NI — single period)`, value: r.netBonus, accent: '#27AE60', hint: 'one-off payment' },
       { label: 'Total take-home (annual)', value: r.cashAnnual, accent: '#27AE60', bold: true },
     ] : [
       { label: 'Take-home (annual)', value: r.cashAnnual, accent: '#27AE60', bold: true },
@@ -101,19 +114,44 @@ export function PayCalculator({
           </div>
         </Field>
 
-        <Field label="Rest day hours per period (1.25×)">
+        <Field label="Rest day hours — typical period (1.25×)">
           <NumericInput
             step="1"
             value={pay.restDayHoursPer4W}
             onChange={(n) => onChange({ restDayHoursPer4W: n })}
           />
+          <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
+            What you usually work — assumed every period, drives the annual tax picture
+          </div>
         </Field>
 
-        <Field label="Sunday rest day hours per period (1.5×)">
+        <Field label="Sunday rest day hours — typical period (1.5×)">
           <NumericInput
             step="1"
             value={pay.sundayRestDayHoursPer4W}
             onChange={(n) => onChange({ sundayRestDayHoursPer4W: n })}
+          />
+        </Field>
+
+        <Field label="Rest day hours — this period only (1.25×)">
+          <NullableNumericInput
+            step="1"
+            value={pay.restDayHoursThisPeriod}
+            onChange={(n) => onChange({ restDayHoursThisPeriod: n })}
+            placeholder="same as typical"
+          />
+          <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
+            One-off override for the coming period — leave blank if it&apos;s a normal one.
+            The extra (or missing) hours are taxed as a single-period payment alongside the bonus.
+          </div>
+        </Field>
+
+        <Field label="Sunday rest day hours — this period only (1.5×)">
+          <NullableNumericInput
+            step="1"
+            value={pay.sundayRestDayHoursThisPeriod}
+            onChange={(n) => onChange({ sundayRestDayHoursThisPeriod: n })}
+            placeholder="same as typical"
           />
         </Field>
 
@@ -234,7 +272,7 @@ export function PayCalculator({
 
       <div style={{ display: 'grid', gap: 20, alignContent: 'start' }}>
         <div className="card tick" style={{ padding: 28 }}>
-          <div className="lab">4-weekly take-home{pay.bonusAnnual > 0 ? ' (regular periods)' : ''}</div>
+          <div className="lab">4-weekly take-home{hasLump ? ' (regular periods)' : ''}</div>
           <div
             className="num"
             style={{ fontSize: 64, color: '#27AE60', lineHeight: 1, marginTop: 12, fontWeight: 500 }}
@@ -245,16 +283,29 @@ export function PayCalculator({
             <Stat label="Annual (incl. bonus)" value={fmtGBP(r.cashAnnual)} />
             <Stat label="Monthly" value={fmtGBP(r.cashMonthly)} />
             <Stat label="Weekly" value={fmtGBP(r.cashWeekly)} />
-            {pay.bonusAnnual > 0 && (
-              <Stat label="Net bonus (lump sum)" value={fmtGBP(r.netBonus)} accent="#F39C12" />
+            {hasLump && (
+              <Stat
+                label={`Net ${lumpLabel} (single period)`}
+                value={fmtGBP(r.netBonus)}
+                accent="#F39C12"
+                sub={lumpGross > 0 ? `${fmtGBP(lumpGross)} gross, taxed at ${fmtPct(1 - r.netBonus / lumpGross, 0)}` : undefined}
+              />
             )}
-            {pay.bonusAnnual > 0 && (
-              <Stat label="Bonus period take-home" value={fmtGBP(r.cash4WeeklyBonusPeriod, { decimals: 0 })} accent="#F39C12" />
+            {hasLump && (
+              <Stat label="This period take-home" value={fmtGBP(r.cash4WeeklyBonusPeriod, { decimals: 0 })} accent="#F39C12" />
             )}
             <Stat label="Effective tax" value={fmtPct(r.effectiveTaxRate, 1)} />
             <Stat label="Marginal rate" value={fmtPct(r.marginal, 0)} />
             <Stat label="Allowance applied" value={fmtGBP(r.allowance)} />
           </div>
+          {hasLump && r.grossForTax > 100_000 && (
+            <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 16, lineHeight: 1.5 }}>
+              Taxable pay is above £100,000, so the personal allowance tapers away and the
+              {' '}{lumpLabel} — the top slice of income — is taxed at up to 62%. Extra regular pay
+              can push more of it into this band: annual take-home still rises, but the
+              one-off payment shrinks. Sacrificing more pension is unusually effective here.
+            </div>
+          )}
         </div>
 
         <div className="panel" style={{ padding: 20 }}>
@@ -332,7 +383,8 @@ export function PayCalculator({
           Estimates only. UK 2026/27 thresholds: PA £12,570 · NI 8% / 2% · Higher rate £50,270 ·
           Additional £125,140. 13 × 4-weekly periods per year. Rest day 1.25× · Sunday rest day 1.5× ordinary
           time rate. Ops allowance on base salary only. Pension on base salary only. Salary sacrifice
-          reduces both tax &amp; NI base.
+          reduces both tax &amp; NI base. NI &amp; student loan are per-period deductions — the bonus and
+          any one-off overtime are treated as landing together in a single period.
         </div>
       </div>
     </div>
@@ -348,11 +400,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function Stat({ label, value, accent, sub }: { label: string; value: string; accent?: string; sub?: string }) {
   return (
     <div>
       <div className="lab">{label}</div>
       <div className="num" style={{ fontSize: 20, marginTop: 4, fontWeight: 500, color: accent }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }

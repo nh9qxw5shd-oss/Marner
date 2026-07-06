@@ -21,8 +21,10 @@ export interface PayConfig {
   baseSalary: number;
   contractHoursPerWeek: number;
   opsAllowancePct: number;
-  restDayHoursPer4W: number;
-  sundayRestDayHoursPer4W: number;
+  restDayHoursPer4W: number;         // typical rest-day hours per period (recurs all year)
+  sundayRestDayHoursPer4W: number;   // typical Sunday hours per period (recurs all year)
+  restDayHoursThisPeriod: number | null;       // one-off override for the next period; null = same as typical
+  sundayRestDayHoursThisPeriod: number | null; // one-off override for the next period; null = same as typical
   competencePayment4W: number;
   cycleToWork4W: number;
   healthcare4W: number;
@@ -51,12 +53,13 @@ export interface PayResult {
   incomeTax: number;
   ni: number;
   studentLoan: number;
-  cashAnnual: number;       // total annual take-home including bonus
-  cash4Weekly: number;      // regular per-period take-home WITHOUT bonus
-  cashMonthly: number;      // regular monthly take-home WITHOUT bonus
-  cashWeekly: number;       // regular weekly take-home WITHOUT bonus
-  netBonus: number;         // net after-tax bonus (paid as one lump sum)
-  cash4WeeklyBonusPeriod: number; // take-home in the period the bonus is received
+  oneOffExtraGross: number; // gross one-off overtime for the coming period (this-period hours − typical)
+  cashAnnual: number;       // total annual take-home including bonus & one-off overtime
+  cash4Weekly: number;      // regular per-period take-home WITHOUT bonus/one-offs
+  cashMonthly: number;      // regular monthly take-home WITHOUT bonus/one-offs
+  cashWeekly: number;       // regular weekly take-home WITHOUT bonus/one-offs
+  netBonus: number;         // net after-tax one-off payment (bonus + one-off overtime, single period)
+  cash4WeeklyBonusPeriod: number; // take-home in the period the bonus/one-off overtime is received
   effectiveTaxRate: number;
   marginal: number;
   allowance: number;
@@ -140,25 +143,20 @@ function calcStudentLoan(
   return total;
 }
 
-function computeMarginalRate(grossForTax: number, region: Region): number {
-  let income = 0;
-  if (region === 'scotland') {
-    if (grossForTax >= 125_140) income = 0.48;
-    else if (grossForTax >= 75_000) income = 0.45;
-    else if (grossForTax >= 43_662) income = 0.42;
-    else if (grossForTax >= 29_526) income = 0.21;
-    else if (grossForTax >= 15_397) income = 0.20;
-    else if (grossForTax >= 12_570) income = 0.19;
-  } else {
-    if (grossForTax >= 125_140) income = 0.45;
-    else if (grossForTax >= 100_000) income = 0.60; // PA taper
-    else if (grossForTax >= 50_270) income = 0.40;
-    else if (grossForTax >= 12_570) income = 0.20;
-  }
-  let niM = 0;
-  if (grossForTax >= 50_270) niM = 0.02;
-  else if (grossForTax >= 12_570) niM = 0.08;
-  return income + niM;
+function incomeTaxFor(grossForTax: number, code: ParsedTaxCode, region: Region): number {
+  const { allowance: codeAllowance, rule } = code;
+  if (rule === 'NT') return 0;
+  if (rule === 'BR') return grossForTax * 0.20;
+  if (rule === 'D0') return grossForTax * 0.40;
+  if (rule === 'D1') return grossForTax * 0.45;
+  if (rule === 'D2') return grossForTax * 0.48;
+  const baseAllowance =
+    codeAllowance < 0 ? codeAllowance : effectivePA(grossForTax, codeAllowance);
+  const taxableForBands =
+    Math.max(0, grossForTax - Math.max(0, baseAllowance)) +
+    (baseAllowance < 0 ? Math.abs(baseAllowance) : 0);
+  const bands = region === 'scotland' ? SCOTLAND_BANDS : RUK_BANDS;
+  return calcBandsTax(taxableForBands, bands);
 }
 
 export function calcTakeHome(cfg: PayConfig): PayResult {
@@ -169,7 +167,17 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   const opsAllowanceAnnual = base * ((cfg.opsAllowancePct || 0) / 100);
   const restDayExtra   = hourlyRate * 1.25 * (cfg.restDayHoursPer4W || 0) * PERIODS_PER_YEAR;
   const sundayExtra    = hourlyRate * 1.50 * (cfg.sundayRestDayHoursPer4W || 0) * PERIODS_PER_YEAR;
-  const restDaySundayAnnual = restDayExtra + sundayExtra;
+
+  // One-off overtime for the coming period: the difference between "this
+  // period" hours (if set) and the typical recurring hours. It is earned once,
+  // not 13 times, and lands in the same period as the bonus.
+  const restThis = cfg.restDayHoursThisPeriod ?? (cfg.restDayHoursPer4W || 0);
+  const sunThis  = cfg.sundayRestDayHoursThisPeriod ?? (cfg.sundayRestDayHoursPer4W || 0);
+  const oneOffExtraGross =
+    hourlyRate * 1.25 * (restThis - (cfg.restDayHoursPer4W || 0)) +
+    hourlyRate * 1.50 * (sunThis - (cfg.sundayRestDayHoursPer4W || 0));
+
+  const restDaySundayAnnual = restDayExtra + sundayExtra + oneOffExtraGross;
   const competencePaymentAnnual = (cfg.competencePayment4W || 0) * PERIODS_PER_YEAR;
   const cycleToWorkAnnual = (cfg.cycleToWork4W || 0) * PERIODS_PER_YEAR;
   const healthcareAnnual  = (cfg.healthcare4W  || 0) * PERIODS_PER_YEAR;
@@ -197,28 +205,32 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   grossForTax -= cycleToWorkAnnual + healthcareAnnual;
   grossForNI  -= cycleToWorkAnnual + healthcareAnnual;
 
-  const { allowance: codeAllowance, rule } = parseTaxCode(cfg.taxCode);
+  const parsedCode = parseTaxCode(cfg.taxCode);
 
   const baseAllowance =
-    codeAllowance < 0 ? codeAllowance : effectivePA(grossForTax, codeAllowance);
+    parsedCode.allowance < 0
+      ? parsedCode.allowance
+      : effectivePA(grossForTax, parsedCode.allowance);
 
-  const taxableForBands =
-    Math.max(0, grossForTax - Math.max(0, baseAllowance)) +
-    (baseAllowance < 0 ? Math.abs(baseAllowance) : 0);
+  // Income tax is cumulative over the year, so an annual calculation is exact.
+  const incomeTax = incomeTaxFor(grossForTax, parsedCode, cfg.region);
 
-  let incomeTax: number;
-  if (rule === 'NT') incomeTax = 0;
-  else if (rule === 'BR') incomeTax = grossForTax * 0.20;
-  else if (rule === 'D0') incomeTax = grossForTax * 0.40;
-  else if (rule === 'D1') incomeTax = grossForTax * 0.45;
-  else if (rule === 'D2') incomeTax = grossForTax * 0.48;
-  else {
-    const bands = cfg.region === 'scotland' ? SCOTLAND_BANDS : RUK_BANDS;
-    incomeTax = calcBandsTax(taxableForBands, bands);
-  }
+  // NI and student loan are non-cumulative, per-pay-period deductions on
+  // NI-able (post-sacrifice) earnings. Regular pay is even across 13 periods;
+  // the bonus and any one-off overtime land together in one period, where only
+  // the slice up to that period's upper earnings limit pays the main rate.
+  // Per-period thresholds are the annual thresholds / 13, so
+  // periodDeduction(x) = annualDeduction(13x) / 13.
+  const oneOffLump = (cfg.bonusAnnual || 0) + oneOffExtraGross;
+  const grossForNINoLump = grossForNI - oneOffLump;
+  const perPeriodTotal = (annualFn: (g: number) => number) =>
+    (annualFn(grossForNINoLump) * 12) / PERIODS_PER_YEAR +
+    annualFn(grossForNINoLump + oneOffLump * PERIODS_PER_YEAR) / PERIODS_PER_YEAR;
 
-  const ni = calcNI(grossForNI);
-  const studentLoan = calcStudentLoan(grossAnnualPreSac, cfg.studentLoanPlan, cfg.hasPostgrad);
+  const ni = perPeriodTotal(calcNI);
+  const studentLoan = perPeriodTotal((g) =>
+    calcStudentLoan(g, cfg.studentLoanPlan, cfg.hasPostgrad)
+  );
 
   // grossForTax already has pension (if salary_sacrifice) + cycle-to-work + healthcare deducted.
   // For other pension types we subtract the non-sacrifice items explicitly.
@@ -232,13 +244,28 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     cashAnnual = grossAnnualPreSac - preTaxExtra - incomeTax - ni - studentLoan - pensionFromNet;
   }
 
-  // Isolate the net bonus as a single payment — recalculate without bonus to find regular pay.
-  // The recursive call is safe: it passes bonusAnnual=0 so will not recurse further.
-  const cashAnnualNoBonus = cfg.bonusAnnual
-    ? calcTakeHome({ ...cfg, bonusAnnual: 0 }).cashAnnual
+  // Isolate the net one-off payment (bonus + one-off overtime) — recalculate
+  // without it to find regular pay. The recursive call is safe: it zeroes the
+  // bonus and the this-period overrides, so it will not recurse further.
+  const cashAnnualNoLump = oneOffLump !== 0
+    ? calcTakeHome({
+        ...cfg,
+        bonusAnnual: 0,
+        restDayHoursThisPeriod: null,
+        sundayRestDayHoursThisPeriod: null,
+      }).cashAnnual
     : cashAnnual;
-  const netBonusPayment = cashAnnual - cashAnnualNoBonus;
-  const regularPeriodCash = cashAnnualNoBonus / PERIODS_PER_YEAR;
+  const netLumpPayment = cashAnnual - cashAnnualNoLump;
+  const regularPeriodCash = cashAnnualNoLump / PERIODS_PER_YEAR;
+
+  // Marginal rate on the next £1 of regular (evenly spread) gross pay, derived
+  // from the actual model so tax-code allowances, the taper window and student
+  // loans are all reflected.
+  const deductionsAt = (extra: number) =>
+    incomeTaxFor(grossForTax + extra, parsedCode, cfg.region) +
+    calcNI(grossForNI + extra) +
+    calcStudentLoan(grossForNI + extra, cfg.studentLoanPlan, cfg.hasPostgrad);
+  const marginal = deductionsAt(1) - deductionsAt(0);
 
   return {
     grossAnnualPreSac,
@@ -254,15 +281,16 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     incomeTax,
     ni,
     studentLoan,
+    oneOffExtraGross,
     cashAnnual,
     cash4Weekly: regularPeriodCash,
-    cashMonthly: cashAnnualNoBonus / 12,
-    cashWeekly: cashAnnualNoBonus / 52,
-    netBonus: netBonusPayment,
-    cash4WeeklyBonusPeriod: regularPeriodCash + netBonusPayment,
+    cashMonthly: cashAnnualNoLump / 12,
+    cashWeekly: cashAnnualNoLump / 52,
+    netBonus: netLumpPayment,
+    cash4WeeklyBonusPeriod: regularPeriodCash + netLumpPayment,
     effectiveTaxRate:
       grossAnnualPreSac > 0 ? (incomeTax + ni + studentLoan) / grossAnnualPreSac : 0,
-    marginal: computeMarginalRate(grossForTax, cfg.region),
+    marginal,
     allowance: Math.max(0, baseAllowance),
     taxYear: TAX_YEAR_LABEL,
   };
