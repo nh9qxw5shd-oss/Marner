@@ -6,6 +6,8 @@ export const DEFAULT_PAY: PayConfig = {
   opsAllowancePct: 20,
   restDayHoursPer4W: 0,
   sundayRestDayHoursPer4W: 0,
+  restDayHoursThisPeriod: null,
+  sundayRestDayHoursThisPeriod: null,
   competencePayment4W: 100,
   cycleToWork4W: 162.06,
   healthcare4W: 104.38,

@@ -21,8 +21,10 @@ export interface PayConfig {
   baseSalary: number;
   contractHoursPerWeek: number;
   opsAllowancePct: number;
-  restDayHoursPer4W: number;
-  sundayRestDayHoursPer4W: number;
+  restDayHoursPer4W: number;         // typical rest-day hours per period (recurs all year)
+  sundayRestDayHoursPer4W: number;   // typical Sunday hours per period (recurs all year)
+  restDayHoursThisPeriod: number | null;       // one-off override for the next period; null = same as typical
+  sundayRestDayHoursThisPeriod: number | null; // one-off override for the next period; null = same as typical
   competencePayment4W: number;
   cycleToWork4W: number;
   healthcare4W: number;
@@ -51,12 +53,13 @@ export interface PayResult {
   incomeTax: number;
   ni: number;
   studentLoan: number;
-  cashAnnual: number;       // total annual take-home including bonus
-  cash4Weekly: number;      // regular per-period take-home WITHOUT bonus
-  cashMonthly: number;      // regular monthly take-home WITHOUT bonus
-  cashWeekly: number;       // regular weekly take-home WITHOUT bonus
-  netBonus: number;         // net after-tax bonus (paid as one lump sum)
-  cash4WeeklyBonusPeriod: number; // take-home in the period the bonus is received
+  oneOffExtraGross: number; // gross one-off overtime for the coming period (this-period hours − typical)
+  cashAnnual: number;       // total annual take-home including bonus & one-off overtime
+  cash4Weekly: number;      // regular per-period take-home WITHOUT bonus/one-offs
+  cashMonthly: number;      // regular monthly take-home WITHOUT bonus/one-offs
+  cashWeekly: number;       // regular weekly take-home WITHOUT bonus/one-offs
+  netBonus: number;         // net after-tax one-off payment (bonus + one-off overtime, single period)
+  cash4WeeklyBonusPeriod: number; // take-home in the period the bonus/one-off overtime is received
   effectiveTaxRate: number;
   marginal: number;
   allowance: number;
@@ -164,7 +167,17 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   const opsAllowanceAnnual = base * ((cfg.opsAllowancePct || 0) / 100);
   const restDayExtra   = hourlyRate * 1.25 * (cfg.restDayHoursPer4W || 0) * PERIODS_PER_YEAR;
   const sundayExtra    = hourlyRate * 1.50 * (cfg.sundayRestDayHoursPer4W || 0) * PERIODS_PER_YEAR;
-  const restDaySundayAnnual = restDayExtra + sundayExtra;
+
+  // One-off overtime for the coming period: the difference between "this
+  // period" hours (if set) and the typical recurring hours. It is earned once,
+  // not 13 times, and lands in the same period as the bonus.
+  const restThis = cfg.restDayHoursThisPeriod ?? (cfg.restDayHoursPer4W || 0);
+  const sunThis  = cfg.sundayRestDayHoursThisPeriod ?? (cfg.sundayRestDayHoursPer4W || 0);
+  const oneOffExtraGross =
+    hourlyRate * 1.25 * (restThis - (cfg.restDayHoursPer4W || 0)) +
+    hourlyRate * 1.50 * (sunThis - (cfg.sundayRestDayHoursPer4W || 0));
+
+  const restDaySundayAnnual = restDayExtra + sundayExtra + oneOffExtraGross;
   const competencePaymentAnnual = (cfg.competencePayment4W || 0) * PERIODS_PER_YEAR;
   const cycleToWorkAnnual = (cfg.cycleToWork4W || 0) * PERIODS_PER_YEAR;
   const healthcareAnnual  = (cfg.healthcare4W  || 0) * PERIODS_PER_YEAR;
@@ -204,14 +217,15 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
 
   // NI and student loan are non-cumulative, per-pay-period deductions on
   // NI-able (post-sacrifice) earnings. Regular pay is even across 13 periods;
-  // the bonus lands in one period, where only the slice up to that period's
-  // upper earnings limit pays the main rate. Per-period thresholds are the
-  // annual thresholds / 13, so periodDeduction(x) = annualDeduction(13x) / 13.
-  const bonus = cfg.bonusAnnual || 0;
-  const grossForNINoBonus = grossForNI - bonus;
+  // the bonus and any one-off overtime land together in one period, where only
+  // the slice up to that period's upper earnings limit pays the main rate.
+  // Per-period thresholds are the annual thresholds / 13, so
+  // periodDeduction(x) = annualDeduction(13x) / 13.
+  const oneOffLump = (cfg.bonusAnnual || 0) + oneOffExtraGross;
+  const grossForNINoLump = grossForNI - oneOffLump;
   const perPeriodTotal = (annualFn: (g: number) => number) =>
-    (annualFn(grossForNINoBonus) * 12) / PERIODS_PER_YEAR +
-    annualFn(grossForNINoBonus + bonus * PERIODS_PER_YEAR) / PERIODS_PER_YEAR;
+    (annualFn(grossForNINoLump) * 12) / PERIODS_PER_YEAR +
+    annualFn(grossForNINoLump + oneOffLump * PERIODS_PER_YEAR) / PERIODS_PER_YEAR;
 
   const ni = perPeriodTotal(calcNI);
   const studentLoan = perPeriodTotal((g) =>
@@ -230,13 +244,19 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     cashAnnual = grossAnnualPreSac - preTaxExtra - incomeTax - ni - studentLoan - pensionFromNet;
   }
 
-  // Isolate the net bonus as a single payment — recalculate without bonus to find regular pay.
-  // The recursive call is safe: it passes bonusAnnual=0 so will not recurse further.
-  const cashAnnualNoBonus = cfg.bonusAnnual
-    ? calcTakeHome({ ...cfg, bonusAnnual: 0 }).cashAnnual
+  // Isolate the net one-off payment (bonus + one-off overtime) — recalculate
+  // without it to find regular pay. The recursive call is safe: it zeroes the
+  // bonus and the this-period overrides, so it will not recurse further.
+  const cashAnnualNoLump = oneOffLump !== 0
+    ? calcTakeHome({
+        ...cfg,
+        bonusAnnual: 0,
+        restDayHoursThisPeriod: null,
+        sundayRestDayHoursThisPeriod: null,
+      }).cashAnnual
     : cashAnnual;
-  const netBonusPayment = cashAnnual - cashAnnualNoBonus;
-  const regularPeriodCash = cashAnnualNoBonus / PERIODS_PER_YEAR;
+  const netLumpPayment = cashAnnual - cashAnnualNoLump;
+  const regularPeriodCash = cashAnnualNoLump / PERIODS_PER_YEAR;
 
   // Marginal rate on the next £1 of regular (evenly spread) gross pay, derived
   // from the actual model so tax-code allowances, the taper window and student
@@ -261,12 +281,13 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     incomeTax,
     ni,
     studentLoan,
+    oneOffExtraGross,
     cashAnnual,
     cash4Weekly: regularPeriodCash,
-    cashMonthly: cashAnnualNoBonus / 12,
-    cashWeekly: cashAnnualNoBonus / 52,
-    netBonus: netBonusPayment,
-    cash4WeeklyBonusPeriod: regularPeriodCash + netBonusPayment,
+    cashMonthly: cashAnnualNoLump / 12,
+    cashWeekly: cashAnnualNoLump / 52,
+    netBonus: netLumpPayment,
+    cash4WeeklyBonusPeriod: regularPeriodCash + netLumpPayment,
     effectiveTaxRate:
       grossAnnualPreSac > 0 ? (incomeTax + ni + studentLoan) / grossAnnualPreSac : 0,
     marginal,
