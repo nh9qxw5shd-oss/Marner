@@ -140,25 +140,20 @@ function calcStudentLoan(
   return total;
 }
 
-function computeMarginalRate(grossForTax: number, region: Region): number {
-  let income = 0;
-  if (region === 'scotland') {
-    if (grossForTax >= 125_140) income = 0.48;
-    else if (grossForTax >= 75_000) income = 0.45;
-    else if (grossForTax >= 43_662) income = 0.42;
-    else if (grossForTax >= 29_526) income = 0.21;
-    else if (grossForTax >= 15_397) income = 0.20;
-    else if (grossForTax >= 12_570) income = 0.19;
-  } else {
-    if (grossForTax >= 125_140) income = 0.45;
-    else if (grossForTax >= 100_000) income = 0.60; // PA taper
-    else if (grossForTax >= 50_270) income = 0.40;
-    else if (grossForTax >= 12_570) income = 0.20;
-  }
-  let niM = 0;
-  if (grossForTax >= 50_270) niM = 0.02;
-  else if (grossForTax >= 12_570) niM = 0.08;
-  return income + niM;
+function incomeTaxFor(grossForTax: number, code: ParsedTaxCode, region: Region): number {
+  const { allowance: codeAllowance, rule } = code;
+  if (rule === 'NT') return 0;
+  if (rule === 'BR') return grossForTax * 0.20;
+  if (rule === 'D0') return grossForTax * 0.40;
+  if (rule === 'D1') return grossForTax * 0.45;
+  if (rule === 'D2') return grossForTax * 0.48;
+  const baseAllowance =
+    codeAllowance < 0 ? codeAllowance : effectivePA(grossForTax, codeAllowance);
+  const taxableForBands =
+    Math.max(0, grossForTax - Math.max(0, baseAllowance)) +
+    (baseAllowance < 0 ? Math.abs(baseAllowance) : 0);
+  const bands = region === 'scotland' ? SCOTLAND_BANDS : RUK_BANDS;
+  return calcBandsTax(taxableForBands, bands);
 }
 
 export function calcTakeHome(cfg: PayConfig): PayResult {
@@ -197,28 +192,31 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   grossForTax -= cycleToWorkAnnual + healthcareAnnual;
   grossForNI  -= cycleToWorkAnnual + healthcareAnnual;
 
-  const { allowance: codeAllowance, rule } = parseTaxCode(cfg.taxCode);
+  const parsedCode = parseTaxCode(cfg.taxCode);
 
   const baseAllowance =
-    codeAllowance < 0 ? codeAllowance : effectivePA(grossForTax, codeAllowance);
+    parsedCode.allowance < 0
+      ? parsedCode.allowance
+      : effectivePA(grossForTax, parsedCode.allowance);
 
-  const taxableForBands =
-    Math.max(0, grossForTax - Math.max(0, baseAllowance)) +
-    (baseAllowance < 0 ? Math.abs(baseAllowance) : 0);
+  // Income tax is cumulative over the year, so an annual calculation is exact.
+  const incomeTax = incomeTaxFor(grossForTax, parsedCode, cfg.region);
 
-  let incomeTax: number;
-  if (rule === 'NT') incomeTax = 0;
-  else if (rule === 'BR') incomeTax = grossForTax * 0.20;
-  else if (rule === 'D0') incomeTax = grossForTax * 0.40;
-  else if (rule === 'D1') incomeTax = grossForTax * 0.45;
-  else if (rule === 'D2') incomeTax = grossForTax * 0.48;
-  else {
-    const bands = cfg.region === 'scotland' ? SCOTLAND_BANDS : RUK_BANDS;
-    incomeTax = calcBandsTax(taxableForBands, bands);
-  }
+  // NI and student loan are non-cumulative, per-pay-period deductions on
+  // NI-able (post-sacrifice) earnings. Regular pay is even across 13 periods;
+  // the bonus lands in one period, where only the slice up to that period's
+  // upper earnings limit pays the main rate. Per-period thresholds are the
+  // annual thresholds / 13, so periodDeduction(x) = annualDeduction(13x) / 13.
+  const bonus = cfg.bonusAnnual || 0;
+  const grossForNINoBonus = grossForNI - bonus;
+  const perPeriodTotal = (annualFn: (g: number) => number) =>
+    (annualFn(grossForNINoBonus) * 12) / PERIODS_PER_YEAR +
+    annualFn(grossForNINoBonus + bonus * PERIODS_PER_YEAR) / PERIODS_PER_YEAR;
 
-  const ni = calcNI(grossForNI);
-  const studentLoan = calcStudentLoan(grossAnnualPreSac, cfg.studentLoanPlan, cfg.hasPostgrad);
+  const ni = perPeriodTotal(calcNI);
+  const studentLoan = perPeriodTotal((g) =>
+    calcStudentLoan(g, cfg.studentLoanPlan, cfg.hasPostgrad)
+  );
 
   // grossForTax already has pension (if salary_sacrifice) + cycle-to-work + healthcare deducted.
   // For other pension types we subtract the non-sacrifice items explicitly.
@@ -239,6 +237,15 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     : cashAnnual;
   const netBonusPayment = cashAnnual - cashAnnualNoBonus;
   const regularPeriodCash = cashAnnualNoBonus / PERIODS_PER_YEAR;
+
+  // Marginal rate on the next £1 of regular (evenly spread) gross pay, derived
+  // from the actual model so tax-code allowances, the taper window and student
+  // loans are all reflected.
+  const deductionsAt = (extra: number) =>
+    incomeTaxFor(grossForTax + extra, parsedCode, cfg.region) +
+    calcNI(grossForNI + extra) +
+    calcStudentLoan(grossForNI + extra, cfg.studentLoanPlan, cfg.hasPostgrad);
+  const marginal = deductionsAt(1) - deductionsAt(0);
 
   return {
     grossAnnualPreSac,
@@ -262,7 +269,7 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
     cash4WeeklyBonusPeriod: regularPeriodCash + netBonusPayment,
     effectiveTaxRate:
       grossAnnualPreSac > 0 ? (incomeTax + ni + studentLoan) / grossAnnualPreSac : 0,
-    marginal: computeMarginalRate(grossForTax, cfg.region),
+    marginal,
     allowance: Math.max(0, baseAllowance),
     taxYear: TAX_YEAR_LABEL,
   };

@@ -246,7 +246,12 @@ export function PayCalculator({
             <Stat label="Monthly" value={fmtGBP(r.cashMonthly)} />
             <Stat label="Weekly" value={fmtGBP(r.cashWeekly)} />
             {pay.bonusAnnual > 0 && (
-              <Stat label="Net bonus (lump sum)" value={fmtGBP(r.netBonus)} accent="#F39C12" />
+              <Stat
+                label="Net bonus (lump sum)"
+                value={fmtGBP(r.netBonus)}
+                accent="#F39C12"
+                sub={`taxed at ${fmtPct(1 - r.netBonus / pay.bonusAnnual, 0)}`}
+              />
             )}
             {pay.bonusAnnual > 0 && (
               <Stat label="Bonus period take-home" value={fmtGBP(r.cash4WeeklyBonusPeriod, { decimals: 0 })} accent="#F39C12" />
@@ -255,6 +260,14 @@ export function PayCalculator({
             <Stat label="Marginal rate" value={fmtPct(r.marginal, 0)} />
             <Stat label="Allowance applied" value={fmtGBP(r.allowance)} />
           </div>
+          {pay.bonusAnnual > 0 && r.grossForTax > 100_000 && (
+            <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 16, lineHeight: 1.5 }}>
+              Taxable pay is above £100,000, so the personal allowance tapers away and the
+              bonus — the top slice of income — is taxed at up to 62%. Extra regular pay
+              (e.g. overtime) can push more of the bonus into this band: annual take-home
+              still rises, but the bonus-period payment can fall.
+            </div>
+          )}
         </div>
 
         <div className="panel" style={{ padding: 20 }}>
@@ -332,7 +345,8 @@ export function PayCalculator({
           Estimates only. UK 2026/27 thresholds: PA £12,570 · NI 8% / 2% · Higher rate £50,270 ·
           Additional £125,140. 13 × 4-weekly periods per year. Rest day 1.25× · Sunday rest day 1.5× ordinary
           time rate. Ops allowance on base salary only. Pension on base salary only. Salary sacrifice
-          reduces both tax &amp; NI base.
+          reduces both tax &amp; NI base. NI &amp; student loan are per-period deductions — the bonus is
+          treated as landing in a single period.
         </div>
       </div>
     </div>
@@ -348,11 +362,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function Stat({ label, value, accent, sub }: { label: string; value: string; accent?: string; sub?: string }) {
   return (
     <div>
       <div className="lab">{label}</div>
       <div className="num" style={{ fontSize: 20, marginTop: 4, fontWeight: 500, color: accent }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
