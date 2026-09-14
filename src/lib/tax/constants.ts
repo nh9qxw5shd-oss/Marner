@@ -48,6 +48,14 @@ export const SCOTLAND_BANDS = [
   { rate: 0.48, upTo: Infinity },
 ] as const;
 
+/**
+ * K codes: the tax deducted in any pay period may not exceed 50% of the
+ * taxable pay for that period (the "overriding limit"). On a cumulative code
+ * the shortfall carries forward; on a non-cumulative code it is simply not
+ * collected via PAYE.
+ */
+export const K_CODE_MAX_DEDUCTION = 0.5;
+
 export const NI = {
   primaryThreshold: 12_570,
   upperEarningsLimit: 50_270,

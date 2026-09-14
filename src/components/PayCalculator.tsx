@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { NullableNumericInput, NumericInput } from './NumericInput';
-import { calcTakeHome } from '@/lib/tax/calc';
+import { calcTakeHome, parseTaxCode } from '@/lib/tax/calc';
 import { fmtGBP, fmtPct } from '@/lib/format';
 import type { PayConfig } from '@/lib/types';
 
@@ -14,6 +14,19 @@ export function PayCalculator({
   onChange: (patch: Partial<PayConfig>) => void;
 }) {
   const r = useMemo(() => calcTakeHome(pay), [pay]);
+  const parsedCode = useMemo(() => parseTaxCode(pay.taxCode), [pay.taxCode]);
+  const isKCode = parsedCode.allowance < 0;
+
+  // The W1/M1 marker lives in the tax code string itself, as on a P2/payslip
+  // ("K386 X"), so the checkbox just adds or strips the trailing " X".
+  const setNonCumulative = (on: boolean) => {
+    const body = pay.taxCode
+      .toUpperCase()
+      .trim()
+      .replace(/\s*(W1\/M1|W1M1|M1|W1|NON\s*CUMULATIVE|NON\s*CUM|X)$/, '')
+      .trim();
+    onChange({ taxCode: on ? `${body} X` : body });
+  };
 
   // The one-off lump paid in the coming period: bonus + this-period-only overtime.
   const lumpGross = pay.bonusAnnual + r.oneOffExtraGross;
@@ -201,8 +214,35 @@ export function PayCalculator({
             placeholder="1257L"
           />
           <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 4 }}>
-            Standard, BR, D0, D1, D2, NT, 0T, K codes supported
+            Standard, BR, D0, D1, D2, NT, 0T, K codes supported. Add X or W1/M1 for non-cumulative.
           </div>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 8,
+              fontSize: 13,
+              color: '#A9B5C9',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={parsedCode.nonCumulative}
+              onChange={(e) => setNonCumulative(e.target.checked)}
+            />
+            Non-cumulative (Week 1 / Month 1)
+          </label>
+          {isKCode && (
+            <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 6, lineHeight: 1.5 }}>
+              K code: {fmtGBP(r.kCodeAddition)} a year is added to taxable pay instead of an allowance
+              being deducted. No £100k taper — HMRC has already priced that into the code.
+              {parsedCode.nonCumulative
+                ? ' Each period is taxed on its own, capped at 50% of that period\u2019s taxable pay.'
+                : ''}
+            </div>
+          )}
         </Field>
 
         <Field label="Region">
@@ -296,9 +336,21 @@ export function PayCalculator({
             )}
             <Stat label="Effective tax" value={fmtPct(r.effectiveTaxRate, 1)} />
             <Stat label="Marginal rate" value={fmtPct(r.marginal, 0)} />
-            <Stat label="Allowance applied" value={fmtGBP(r.allowance)} />
+            {isKCode ? (
+              <Stat label="K code addition" value={`+${fmtGBP(r.kCodeAddition)}`} accent="#E74C3C" />
+            ) : (
+              <Stat label="Allowance applied" value={fmtGBP(r.allowance)} />
+            )}
+            <Stat label="Tax basis" value={r.nonCumulative ? 'W1/M1' : 'Cumulative'} />
           </div>
-          {hasLump && r.grossForTax > 100_000 && (
+          {hasLump && r.nonCumulative && (
+            <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 16, lineHeight: 1.5 }}>
+              Non-cumulative code: the {lumpLabel} is taxed in its own period against one period&apos;s
+              share of the bands, with no rebalancing in later periods. Any overpayment against the
+              annual position is only recovered by HMRC reconciliation, not through the payslip.
+            </div>
+          )}
+          {hasLump && !isKCode && r.grossForTax > 100_000 && (
             <div style={{ fontSize: 11, color: '#7A8BA8', marginTop: 16, lineHeight: 1.5 }}>
               Taxable pay is above £100,000, so the personal allowance tapers away and the
               {' '}{lumpLabel} — the top slice of income — is taxed at up to 62%. Extra regular pay
@@ -384,7 +436,9 @@ export function PayCalculator({
           Additional £125,140. 13 × 4-weekly periods per year. Rest day 1.25× · Sunday rest day 1.5× ordinary
           time rate. Ops allowance on base salary only. Pension on base salary only. Salary sacrifice
           reduces both tax &amp; NI base. NI &amp; student loan are per-period deductions — the bonus and
-          any one-off overtime are treated as landing together in a single period.
+          any one-off overtime are treated as landing together in a single period. Income tax is annual
+          on a cumulative code and per-period on a W1/M1 (X) code; K codes add to taxable pay and cap
+          each period&apos;s deduction at 50%.
         </div>
       </div>
     </div>

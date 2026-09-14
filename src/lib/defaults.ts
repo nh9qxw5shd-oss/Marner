@@ -14,7 +14,7 @@ export const DEFAULT_PAY: PayConfig = {
   bonusAnnual: 0,
   pensionPct: 5,
   pensionType: 'salary_sacrifice',
-  taxCode: '845T',
+  taxCode: 'K386 X',
   region: 'rUK',
   studentLoanPlan: 'NONE',
   hasPostgrad: false,
