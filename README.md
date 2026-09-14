@@ -103,7 +103,8 @@ The tax engine in `src/lib/tax/` has zero React dependencies. Tax-year constants
 
 ## Tax engine notes
 
-- **Tax codes**: `1257L` and other numeric forms, `BR`, `D0`, `D1`, `D2`, `NT`, `0T`, and `K` codes.
+- **Tax codes**: `1257L` and other numeric forms, `BR`, `D0`, `D1`, `D2`, `NT`, `0T`, and `K` codes (`K386` adds £3,869 to taxable pay; never tapered).
+- **Non-cumulative (W1/M1) basis**: append `X`, `W1/M1` or `M1` to the code (`K386 X`) or tick the checkbox. Regular pay is taxed identically to cumulative; a bonus or one-off overtime is taxed in its own period against 1/13 of the bands with no later rebalancing. K codes cap the deduction at 50% of a period's taxable pay.
 - **Pension treatments**: salary sacrifice (reduces both tax & NI base), net pay (reduces tax base only), relief at source (deducted from net).
 - **Student loans**: Plans 1, 2, 4, 5 + Postgrad with correct stacking.
 - **Regions**: rUK and Scottish bands.

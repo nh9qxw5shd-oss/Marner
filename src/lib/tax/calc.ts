@@ -3,6 +3,7 @@
  */
 
 import {
+  K_CODE_MAX_DEDUCTION,
   NI,
   PA_TAPER_END,
   PA_TAPER_START,
@@ -63,26 +64,46 @@ export interface PayResult {
   effectiveTaxRate: number;
   marginal: number;
   allowance: number;
+  kCodeAddition: number;    // annual amount a K code ADDS to taxable pay (0 for non-K codes)
+  nonCumulative: boolean;   // true when the tax code carries a W1/M1 ("X") marker
   taxYear: string;
 }
 
 type TaxCodeRule = 'STANDARD' | 'BR' | 'D0' | 'D1' | 'D2' | 'NT';
 
-interface ParsedTaxCode {
-  allowance: number;
+export interface ParsedTaxCode {
+  allowance: number;      // negative for K codes (the amount ADDED to taxable pay)
   rule: TaxCodeRule;
+  nonCumulative: boolean; // Week 1 / Month 1 basis — each period taxed in isolation
 }
 
+/**
+ * Trailing non-cumulative markers as they appear on a P2 / payslip:
+ * "1257L X", "K386 X", "845T W1/M1", "BR M1", "K386 NONCUM". Whitespace is
+ * stripped before matching, so "W1/M1" and "W1M1" are the same thing.
+ */
+const NON_CUMULATIVE_SUFFIX = /(W1\/M1|W1M1|M1|W1|NONCUMULATIVE|NONCUM|X)$/;
+
 export function parseTaxCode(code: string): ParsedTaxCode {
-  if (!code) return { allowance: PERSONAL_ALLOWANCE, rule: 'STANDARD' };
-  const c = String(code).toUpperCase().trim().replace(/\s+/g, '');
+  if (!code) return { allowance: PERSONAL_ALLOWANCE, rule: 'STANDARD', nonCumulative: false };
+  let c = String(code).toUpperCase().trim().replace(/\s+/g, '');
+  const nonCumulative = NON_CUMULATIVE_SUFFIX.test(c);
+  if (nonCumulative) c = c.replace(NON_CUMULATIVE_SUFFIX, '');
+  const parsed = parseTaxCodeBody(c);
+  return { ...parsed, nonCumulative };
+}
+
+function parseTaxCodeBody(c: string): Omit<ParsedTaxCode, 'nonCumulative'> {
+  if (!c) return { allowance: PERSONAL_ALLOWANCE, rule: 'STANDARD' };
   if (c === 'BR') return { allowance: 0, rule: 'BR' };
   if (c === 'D0') return { allowance: 0, rule: 'D0' };
   if (c === 'D1') return { allowance: 0, rule: 'D1' };
   if (c === 'D2') return { allowance: 0, rule: 'D2' };
   if (c === 'NT') return { allowance: 0, rule: 'NT' };
   if (c === '0T') return { allowance: 0, rule: 'STANDARD' };
-  // K codes: prefix indicates negative allowance (additional taxable income)
+  // K codes: prefix indicates negative allowance (additional taxable income).
+  // Same "× 10 + 9" convention as suffix codes — HMRC's Pay Adjustment Tables
+  // are used for both, just added to pay instead of subtracted.
   if (c.startsWith('K')) {
     const n = parseInt(c.slice(1).replace(/[^0-9]/g, ''), 10) || 0;
     return { allowance: -(n * 10 + 9), rule: 'STANDARD' };
@@ -143,20 +164,73 @@ function calcStudentLoan(
   return total;
 }
 
-function incomeTaxFor(grossForTax: number, code: ParsedTaxCode, region: Region): number {
-  const { allowance: codeAllowance, rule } = code;
+/**
+ * The allowance the tax code yields against a given annual taxable pay.
+ * K codes are never tapered — HMRC has already priced the taper (or whatever
+ * else) into the code. Returned negative for K codes.
+ */
+function resolveAllowance(code: ParsedTaxCode, grossForTax: number): number {
+  return code.allowance < 0 ? code.allowance : effectivePA(grossForTax, code.allowance);
+}
+
+/** Annual income tax on `grossForTax` given an already-resolved allowance. */
+function incomeTaxWithAllowance(
+  grossForTax: number,
+  allowance: number,
+  rule: TaxCodeRule,
+  region: Region
+): number {
   if (rule === 'NT') return 0;
   if (rule === 'BR') return grossForTax * 0.20;
   if (rule === 'D0') return grossForTax * 0.40;
   if (rule === 'D1') return grossForTax * 0.45;
   if (rule === 'D2') return grossForTax * 0.48;
-  const baseAllowance =
-    codeAllowance < 0 ? codeAllowance : effectivePA(grossForTax, codeAllowance);
   const taxableForBands =
-    Math.max(0, grossForTax - Math.max(0, baseAllowance)) +
-    (baseAllowance < 0 ? Math.abs(baseAllowance) : 0);
+    Math.max(0, grossForTax - Math.max(0, allowance)) + (allowance < 0 ? Math.abs(allowance) : 0);
   const bands = region === 'scotland' ? SCOTLAND_BANDS : RUK_BANDS;
   return calcBandsTax(taxableForBands, bands);
+}
+
+function incomeTaxFor(grossForTax: number, code: ParsedTaxCode, region: Region): number {
+  return incomeTaxWithAllowance(grossForTax, resolveAllowance(code, grossForTax), code.rule, region);
+}
+
+/**
+ * Total income tax for the year on annual taxable pay `grossForTax`, of which
+ * `oneOffLump` lands in a single period and the rest is spread evenly over
+ * `periods` pay periods.
+ *
+ * Cumulative basis: PAYE self-corrects over the year, so the annual figure is
+ * exact regardless of when the lump is paid.
+ *
+ * Non-cumulative (W1/M1, "X") basis: every period is taxed in isolation using
+ * 1/periods of the allowance (or K-code addition) and 1/periods of each band,
+ * with no reference to earlier periods. Even pay comes out identical to
+ * cumulative; a lump does not — it is stacked on one period's bands only, so
+ * more of it hits the higher rates and nothing is refunded later. On a K code
+ * the deduction in any period is also capped at 50% of that period's taxable
+ * pay (the regulatory limit). The code's allowance is fixed for the year, so
+ * the taper is resolved on regular pay, not on the lump-inflated period.
+ */
+function incomeTaxTotal(
+  grossForTax: number,
+  oneOffLump: number,
+  code: ParsedTaxCode,
+  region: Region,
+  periods: number
+): number {
+  if (!code.nonCumulative) return incomeTaxFor(grossForTax, code, region);
+
+  const regularAnnual = grossForTax - oneOffLump;
+  const allowance = resolveAllowance(code, regularAnnual);
+  const periodTax = (periodPay: number) => {
+    const tax = incomeTaxWithAllowance(periodPay * periods, allowance, code.rule, region) / periods;
+    return code.allowance < 0
+      ? Math.min(tax, Math.max(0, periodPay) * K_CODE_MAX_DEDUCTION)
+      : tax;
+  };
+  const regularPeriod = regularAnnual / periods;
+  return periodTax(regularPeriod) * (periods - 1) + periodTax(regularPeriod + oneOffLump);
 }
 
 export function calcTakeHome(cfg: PayConfig): PayResult {
@@ -206,14 +280,16 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   grossForNI  -= cycleToWorkAnnual + healthcareAnnual;
 
   const parsedCode = parseTaxCode(cfg.taxCode);
+  const oneOffLump = (cfg.bonusAnnual || 0) + oneOffExtraGross;
 
-  const baseAllowance =
-    parsedCode.allowance < 0
-      ? parsedCode.allowance
-      : effectivePA(grossForTax, parsedCode.allowance);
+  const baseAllowance = resolveAllowance(
+    parsedCode,
+    parsedCode.nonCumulative ? grossForTax - oneOffLump : grossForTax
+  );
 
-  // Income tax is cumulative over the year, so an annual calculation is exact.
-  const incomeTax = incomeTaxFor(grossForTax, parsedCode, cfg.region);
+  // Income tax: annual (exact) on a cumulative code; period-by-period on a
+  // non-cumulative (W1/M1) code — see incomeTaxTotal.
+  const incomeTax = incomeTaxTotal(grossForTax, oneOffLump, parsedCode, cfg.region, PERIODS_PER_YEAR);
 
   // NI and student loan are non-cumulative, per-pay-period deductions on
   // NI-able (post-sacrifice) earnings. Regular pay is even across 13 periods;
@@ -221,7 +297,6 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   // the slice up to that period's upper earnings limit pays the main rate.
   // Per-period thresholds are the annual thresholds / 13, so
   // periodDeduction(x) = annualDeduction(13x) / 13.
-  const oneOffLump = (cfg.bonusAnnual || 0) + oneOffExtraGross;
   const grossForNINoLump = grossForNI - oneOffLump;
   const perPeriodTotal = (annualFn: (g: number) => number) =>
     (annualFn(grossForNINoLump) * 12) / PERIODS_PER_YEAR +
@@ -262,7 +337,7 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
   // from the actual model so tax-code allowances, the taper window and student
   // loans are all reflected.
   const deductionsAt = (extra: number) =>
-    incomeTaxFor(grossForTax + extra, parsedCode, cfg.region) +
+    incomeTaxTotal(grossForTax + extra, oneOffLump, parsedCode, cfg.region, PERIODS_PER_YEAR) +
     calcNI(grossForNI + extra) +
     calcStudentLoan(grossForNI + extra, cfg.studentLoanPlan, cfg.hasPostgrad);
   const marginal = deductionsAt(1) - deductionsAt(0);
@@ -292,6 +367,8 @@ export function calcTakeHome(cfg: PayConfig): PayResult {
       grossAnnualPreSac > 0 ? (incomeTax + ni + studentLoan) / grossAnnualPreSac : 0,
     marginal,
     allowance: Math.max(0, baseAllowance),
+    kCodeAddition: baseAllowance < 0 ? -baseAllowance : 0,
+    nonCumulative: parsedCode.nonCumulative,
     taxYear: TAX_YEAR_LABEL,
   };
 }
